@@ -117,8 +117,13 @@ export default function App() {
   } | null>(null);
 
   // Login Screen states
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
+  const [regUsername, setRegUsername] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPass, setRegPass] = useState("");
+  const [regDisplayName, setRegDisplayName] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
@@ -219,6 +224,42 @@ export default function App() {
       }
     } catch (err) {
       setLoginError("Failed to connect to the panel backend.");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
+    if (!regUsername.trim() || !regEmail.trim() || !regPass.trim()) {
+      setLoginError("Please enter a username, email, and password.");
+      return;
+    }
+
+    setLoginLoading(true);
+    try {
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: regUsername.trim(),
+          email: regEmail.trim(),
+          password: regPass,
+          displayName: regDisplayName.trim() || regUsername.trim()
+        })
+      });
+
+      if (res.ok) {
+        const sessionData = await res.json();
+        setSession(sessionData);
+        localStorage.setItem("craft_session", JSON.stringify(sessionData));
+      } else {
+        const err = await res.json();
+        setLoginError(err.error || "Registration failed.");
+      }
+    } catch (err) {
+      setLoginError("Failed to connect to the registration server.");
     } finally {
       setLoginLoading(false);
     }
@@ -678,62 +719,173 @@ export default function App() {
               <h2 className="text-xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
                 Perplex Panel <span className="text-[10px] bg-purple-500/20 text-purple-300 font-mono px-2 py-0.5 rounded border border-purple-500/30">SECURE v2.5</span>
               </h2>
-              <p className="text-xs text-slate-400">Authenticating connection to panel.unstableuniverse.world</p>
+              <p className="text-xs text-slate-400">Accessing server node panel cluster</p>
             </div>
 
-            <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="text-slate-300 font-bold block uppercase tracking-wider">Email Address / User</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
-                  <input 
-                    type="text"
-                    required
-                    placeholder="e.g. admin@unstableuniverse.world"
-                    value={loginUser}
-                    onChange={e => setLoginUser(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-slate-300 font-bold block uppercase tracking-wider">Secret Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
-                  <input 
-                    type="password"
-                    required
-                    placeholder="••••••••••••"
-                    value={loginPass}
-                    onChange={e => setLoginPass(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
-                  />
-                </div>
-              </div>
-
-              {loginError && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-[10px] flex items-start gap-1.5 leading-normal">
-                  <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
-                  <span>{loginError}</span>
-                </div>
-              )}
-
+            {/* Switch Mode Tabs */}
+            <div className="grid grid-cols-2 p-1 bg-slate-950/60 rounded-xl border border-violet-950/40 text-xs font-bold">
               <button
-                type="submit"
-                disabled={loginLoading}
-                className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl transition-all shadow-neon-purple shrink-0 flex items-center justify-center gap-2 cursor-pointer text-xs disabled:opacity-50"
+                type="button"
+                onClick={() => { setAuthMode("signin"); setLoginError(""); }}
+                className={`py-2 rounded-lg transition-all cursor-pointer ${
+                  authMode === "signin"
+                    ? "bg-purple-600 text-white shadow-md"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
               >
-                {loginLoading ? (
-                  <span>Accessing Node Securely...</span>
-                ) : (
-                  <>
-                    <Lock className="h-4 w-4" />
-                    <span>Authorize Login & Mount</span>
-                  </>
-                )}
+                Sign In
               </button>
-            </form>
+              <button
+                type="button"
+                onClick={() => { setAuthMode("signup"); setLoginError(""); }}
+                className={`py-2 rounded-lg transition-all cursor-pointer ${
+                  authMode === "signup"
+                    ? "bg-purple-600 text-white shadow-md"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
+
+            {authMode === "signin" ? (
+              <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs animate-fadeIn">
+                <div className="space-y-1.5">
+                  <label className="text-slate-300 font-bold block uppercase tracking-wider">Username or Email</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
+                    <input 
+                      type="text"
+                      required
+                      placeholder="e.g. admin@unstableuniverse.world"
+                      value={loginUser}
+                      onChange={e => setLoginUser(e.target.value)}
+                      className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-300 font-bold block uppercase tracking-wider">Secret Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
+                    <input 
+                      type="password"
+                      required
+                      placeholder="••••••••••••"
+                      value={loginPass}
+                      onChange={e => setLoginPass(e.target.value)}
+                      className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                {loginError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-[10px] flex items-start gap-1.5 leading-normal">
+                    <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
+                    <span>{loginError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl transition-all shadow-neon-purple shrink-0 flex items-center justify-center gap-2 cursor-pointer text-xs disabled:opacity-50"
+                >
+                  {loginLoading ? (
+                    <span>Accessing Node Securely...</span>
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4" />
+                      <span>Authorize Login & Mount</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleRegisterSubmit} className="space-y-4 text-xs animate-fadeIn">
+                <div className="space-y-1.5">
+                  <label className="text-slate-300 font-bold block uppercase tracking-wider">Desired Username</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
+                    <input 
+                      type="text"
+                      required
+                      placeholder="e.g. strkxx"
+                      value={regUsername}
+                      onChange={e => setRegUsername(e.target.value)}
+                      className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-300 font-bold block uppercase tracking-wider">Email Address</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
+                    <input 
+                      type="email"
+                      required
+                      placeholder="e.g. dev@unstableuniverse.world"
+                      value={regEmail}
+                      onChange={e => setRegEmail(e.target.value)}
+                      className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-300 font-bold block uppercase tracking-wider">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
+                    <input 
+                      type="password"
+                      required
+                      placeholder="••••••••••••"
+                      value={regPass}
+                      onChange={e => setRegPass(e.target.value)}
+                      className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-slate-300 font-bold block uppercase tracking-wider">Display Name (Optional)</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
+                    <input 
+                      type="text"
+                      placeholder="e.g. strkxx (Sovereign Owner)"
+                      value={regDisplayName}
+                      onChange={e => setRegDisplayName(e.target.value)}
+                      className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all"
+                    />
+                  </div>
+                </div>
+
+                {loginError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-[10px] flex items-start gap-1.5 leading-normal">
+                    <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
+                    <span>{loginError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl transition-all shadow-neon-purple shrink-0 flex items-center justify-center gap-2 cursor-pointer text-xs disabled:opacity-50"
+                >
+                  {loginLoading ? (
+                    <span>Registering Account...</span>
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4" />
+                      <span>Register & Launch</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
 
             <div className="border-t border-violet-950/60 pt-4 text-[10px] text-slate-400 space-y-2 leading-relaxed">
               <span className="font-bold text-purple-400 block uppercase tracking-wide text-[9px]">Demo Sign-In credentials:</span>

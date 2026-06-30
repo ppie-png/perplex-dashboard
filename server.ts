@@ -76,6 +76,37 @@ app.post("/api/login", (req, res) => {
   });
 });
 
+app.post("/api/register", (req, res) => {
+  const { username, email, password, displayName } = req.body;
+  if (!username || !email || !password) {
+    return res.status(400).json({ error: "Username, email, and password are required." });
+  }
+  const db = readDb();
+  const exists = db.users.find((u: any) => 
+    u.username.toLowerCase() === username.trim().toLowerCase() || 
+    u.email.toLowerCase() === email.trim().toLowerCase()
+  );
+  if (exists) {
+    return res.status(400).json({ error: "Username or Email is already registered." });
+  }
+  const newUser = { 
+    username: username.trim(), 
+    email: email.trim(), 
+    password, 
+    role: "client", 
+    displayName: displayName?.trim() || username.trim() 
+  };
+  db.users.push(newUser);
+  writeDb(db);
+  res.status(201).json({
+    username: newUser.username,
+    email: newUser.email,
+    role: newUser.role,
+    displayName: newUser.displayName,
+    token: `session_token_${newUser.username}_${Date.now()}`
+  });
+});
+
 // Get Database State
 app.get("/api/db", (req, res) => {
   const db = readDb();
