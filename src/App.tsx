@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Terminal, FolderOpen, Search, Database, 
   Settings, HardDrive, Sparkles, Server, Copy, Check,
-  Play, RotateCcw, Square, ExternalLink, ShieldAlert
+  Play, RotateCcw, Square, ExternalLink, ShieldAlert,
+  Layers, Rocket
 } from "lucide-react";
 
 import { 
@@ -18,6 +19,8 @@ import BackupView from "./components/BackupView";
 import SettingsView from "./components/SettingsView";
 import CopilotView from "./components/CopilotView";
 import LinuxDeploymentView from "./components/LinuxDeploymentView";
+import ServerSplitterView from "./components/ServerSplitterView";
+import TemplatesView from "./components/TemplatesView";
 
 // Hardcoded mock data definitions
 const DEFAULT_FILES: FileItem[] = [
@@ -67,7 +70,7 @@ const generateId = (prefix: string = "id"): string => {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"console" | "files" | "plugins" | "databases" | "backups" | "settings" | "copilot" | "deploy">("console");
+  const [activeTab, setActiveTab] = useState<"console" | "files" | "plugins" | "databases" | "backups" | "settings" | "copilot" | "deploy" | "splitter" | "templates">("console");
   const [status, setStatus] = useState<ServerStatus>("online");
   const [copiedIp, setCopiedIp] = useState(false);
 
@@ -664,6 +667,30 @@ export default function App() {
             Linux Deploy
           </button>
 
+          <button
+            onClick={() => setActiveTab("splitter")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "splitter" 
+                ? "bg-slate-800 text-white shadow-md border-b-2 border-emerald-500" 
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+          >
+            <Layers className="h-4 w-4 text-emerald-400" />
+            Server Splitter
+          </button>
+
+          <button
+            onClick={() => setActiveTab("templates")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "templates" 
+                ? "bg-slate-800 text-white shadow-md border-b-2 border-emerald-500" 
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+          >
+            <Rocket className="h-4 w-4 text-indigo-400 animate-pulse" />
+            Templates
+          </button>
+
           <div className="flex-1"></div>
 
           {/* AI Copilot Tab Trigger */}
@@ -742,6 +769,14 @@ export default function App() {
 
           {activeTab === "deploy" && (
             <LinuxDeploymentView />
+          )}
+
+          {activeTab === "splitter" && (
+            <ServerSplitterView />
+          )}
+
+          {activeTab === "templates" && (
+            <TemplatesView />
           )}
         </div>
       </main>
