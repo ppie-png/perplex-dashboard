@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Plus, 
   Trash2, 
@@ -37,7 +37,7 @@ interface SplitInstance {
   port: number;
 }
 
-export default function ServerSplitterView() {
+export default function ServerSplitterView({ userRole = "admin", username = "admin" }: { userRole?: string; username?: string }) {
   const [node, setNode] = useState<NodeResource>({
     totalCpu: 16,
     totalRam: 64,
@@ -47,17 +47,13 @@ export default function ServerSplitterView() {
     allocatedDisk: 280
   });
 
-  const [instances, setInstances] = useState<SplitInstance[]>([
-    { id: "inst_1", name: "Minecraft lobby-01", type: "Paper Minecraft", owner: "admin", cpuLimit: 4, ramLimit: 16, diskLimit: 100, status: "active", port: 25565 },
-    { id: "inst_2", name: "Discord-Bot-Main", type: "Node.js Bot", owner: "strkxx", cpuLimit: 1, ramLimit: 2, diskLimit: 10, status: "active", port: 8080 },
-    { id: "inst_3", name: "MySQL-Primary-DB", type: "MySQL Database", owner: "db_user", cpuLimit: 2.5, ramLimit: 12, diskLimit: 120, status: "active", port: 3306 },
-    { id: "inst_4", name: "Palworld-Coop", type: "Palworld Server", owner: "strkxx", cpuLimit: 2, ramLimit: 8, diskLimit: 50, status: "offline", port: 8211 }
-  ]);
+  const [instances, setInstances] = useState<SplitInstance[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Form states
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("Paper Minecraft");
-  const [newOwner, setNewOwner] = useState("strkxx");
+  const [newOwner, setNewOwner] = useState("client");
   const [newCpu, setNewCpu] = useState(2);
   const [newRam, setNewRam] = useState(8);
   const [newDisk, setNewDisk] = useState(50);
@@ -68,8 +64,36 @@ export default function ServerSplitterView() {
   const freeRam = node.totalRam - node.allocatedRam;
   const freeDisk = node.totalDisk - node.allocatedDisk;
 
-  const handleCreateSplit = (e: React.FormEvent) => {
+  const refreshData = async () => {
+    try {
+      const res = await fetch("/api/db");
+      if (res.ok) {
+        const data = await res.json();
+        setInstances(data.instances || []);
+        if (data.nodeResources) {
+          setNode(data.nodeResources);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load server partitions:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshData();
+    const interval = setInterval(refreshData, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleCreateSplit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (userRole !== "admin") {
+      setErrorMsg("Access Denied: Only root administrators can partition host resources.");
+      return;
+    }
+
     if (!newName.trim()) {
       setErrorMsg("Please specify a unique instance name.");
       return;
@@ -88,51 +112,57 @@ export default function ServerSplitterView() {
       return;
     }
 
-    const randomPort = Math.floor(Math.random() * 9000) + 10000;
-    const newInst: SplitInstance = {
-      id: `inst_${Date.now()}`,
-      name: newName,
-      type: newType,
-      owner: newOwner,
-      cpuLimit: newCpu,
-      ramLimit: newRam,
-      diskLimit: newDisk,
-      status: "installing",
-      port: randomPort
-    };
+    try {
+      const randomPort = Math.floor(Math.random() * 9000) + 10000;
+      const res = await fetch("/api/instances", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newName,
+          type: newType,
+          owner: newOwner,
+          cpuLimit: newCpu,
+          ramLimit: newRam,
+          diskLimit: newDisk,
+          port: randomPort
+        })
+      });
 
-    setInstances(prev => [...prev, newInst]);
-    setNode(prev => ({
-      ...prev,
-      allocatedCpu: prev.allocatedCpu + newCpu,
-      allocatedRam: prev.allocatedRam + newRam,
-      allocatedDisk: prev.allocatedDisk + newDisk
-    }));
-
-    setSuccessMsg(`Successfully partitioned & allocated server "${newName}" on Port ${randomPort}!`);
-    setNewName("");
-    setErrorMsg("");
-
-    // Simulate complete installation after 4 seconds
-    setTimeout(() => {
-      setInstances(prev => prev.map(inst => inst.name === newName ? { ...inst, status: "active" } : inst));
-    }, 4000);
-
-    setTimeout(() => setSuccessMsg(""), 5000);
+      if (res.ok) {
+        setSuccessMsg(`Successfully partitioned & allocated server "${newName}" on Port ${randomPort}!`);
+        setNewName("");
+        setErrorMsg("");
+        refreshData();
+        setTimeout(() => setSuccessMsg(""), 5000);
+      } else {
+        const err = await res.json();
+        setErrorMsg(err.error || "Failed to create partition");
+      }
+    } catch (err) {
+      setErrorMsg("Network error trying to contact the host agent.");
+    }
   };
 
-  const handleDeleteSplit = (id: string) => {
+  const handleDeleteSplit = async (id: string) => {
+    if (userRole !== "admin") {
+      alert("Access Denied: Only root administrators can delete server partitions.");
+      return;
+    }
+
     const inst = instances.find(i => i.id === id);
     if (!inst) return;
 
     if (confirm(`Are you absolutely sure you want to delete and destroy "${inst.name}"? All data inside this split container will be permanently wiped!`)) {
-      setInstances(prev => prev.filter(i => i.id !== id));
-      setNode(prev => ({
-        ...prev,
-        allocatedCpu: Math.max(0, prev.allocatedCpu - inst.cpuLimit),
-        allocatedRam: Math.max(0, prev.allocatedRam - inst.ramLimit),
-        allocatedDisk: Math.max(0, prev.allocatedDisk - inst.diskLimit)
-      }));
+      try {
+        const res = await fetch(`/api/instances/${id}`, { method: "DELETE" });
+        if (res.ok) {
+          refreshData();
+        } else {
+          alert("Failed to destroy server partition.");
+        }
+      } catch (err) {
+        console.error("Error deleting partition:", err);
+      }
     }
   };
 

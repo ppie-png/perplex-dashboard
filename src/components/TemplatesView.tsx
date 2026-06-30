@@ -182,6 +182,23 @@ export default function TemplatesView() {
         if (idx === logsList.length - 1) {
           const randomPort = Math.floor(Math.random() * 8000) + 20000;
           setDeployedPort(randomPort);
+          
+          // Persist the deployed template instance in our database
+          const serverName = formVariables.SERVER_NAME || formVariables.POSTGRES_DB || formVariables.DOMAIN_NAME || `${selectedTemplate.name.split(" ")[0]}-${Date.now().toString().slice(-4)}`;
+          fetch("/api/instances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: serverName,
+              type: selectedTemplate.name,
+              owner: "client",
+              cpuLimit: selectedTemplate.requirements.cpu,
+              ramLimit: selectedTemplate.requirements.ram,
+              diskLimit: selectedTemplate.requirements.disk,
+              port: randomPort
+            })
+          }).catch(err => console.error("Auto-registration of template instance failed:", err));
+
           setDeployStep("success");
         }
       }, delay);

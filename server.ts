@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import fs from "fs";
 
 dotenv.config();
 
@@ -10,6 +11,192 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+const DB_FILE = path.join(process.cwd(), "db.json");
+
+// Database Helper Functions
+function readDb() {
+  try {
+    if (!fs.existsSync(DB_FILE)) {
+      // fallback template if file is deleted
+      const defaultData = {
+        users: [
+          { username: "admin", password: "adminpassword", role: "admin", displayName: "strkxx (Root)" },
+          { username: "client", password: "clientpassword", role: "client", displayName: "unstable_user" }
+        ],
+        instances: [],
+        errors: [],
+        pressureLogs: [],
+        nodeResources: { totalCpu: 16, totalRam: 64, totalDisk: 500, allocatedCpu: 0, allocatedRam: 0, allocatedDisk: 0 }
+      };
+      fs.writeFileSync(DB_FILE, JSON.stringify(defaultData, null, 2));
+      return defaultData;
+    }
+    const raw = fs.readFileSync(DB_FILE, "utf-8");
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("Error reading db.json", err);
+    return { users: [], instances: [], errors: [], pressureLogs: [], nodeResources: {} };
+  }
+}
+
+function writeDb(data: any) {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Error writing db.json", err);
+  }
+}
+
+// REST APIs for Persistence
+
+// Authentication
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body;
+  const db = readDb();
+  const user = db.users.find((u: any) => u.username === username && u.password === password);
+  if (!user) {
+    return res.status(401).json({ error: "Invalid username or password" });
+  }
+  res.json({
+    username: user.username,
+    role: user.role,
+    displayName: user.displayName,
+    token: `session_token_${user.username}_${Date.now()}`
+  });
+});
+
+// Get Database State
+app.get("/api/db", (req, res) => {
+  const db = readDb();
+  // Strip passwords before returning
+  const safeUsers = db.users.map(({ password, ...u }: any) => u);
+  res.json({ ...db, users: safeUsers });
+});
+
+// Add Split Server Instance
+app.post("/api/instances", (req, res) => {
+  const { name, type, owner, cpuLimit, ramLimit, diskLimit, port } = req.body;
+  if (!name) return res.status(400).json({ error: "Name is required" });
+
+  const db = readDb();
+  
+  // Create instance
+  const newInst = {
+    id: `inst_${Date.now()}`,
+    name,
+    type,
+    owner,
+    cpuLimit: Number(cpuLimit) || 1,
+    ramLimit: Number(ramLimit) || 2,
+    diskLimit: Number(diskLimit) || 10,
+    status: "installing",
+    port: Number(port) || (Math.floor(Math.random() * 9000) + 10000)
+  };
+
+  db.instances.push(newInst);
+
+  // Re-calculate resources
+  const totalAllocCpu = db.instances.reduce((acc: number, item: any) => acc + item.cpuLimit, 0);
+  const totalAllocRam = db.instances.reduce((acc: number, item: any) => acc + item.ramLimit, 0);
+  const totalAllocDisk = db.instances.reduce((acc: number, item: any) => acc + item.diskLimit, 0);
+
+  db.nodeResources.allocatedCpu = totalAllocCpu;
+  db.nodeResources.allocatedRam = totalAllocRam;
+  db.nodeResources.allocatedDisk = totalAllocDisk;
+
+  writeDb(db);
+  res.status(201).json(newInst);
+
+  // Simulated auto-installation transition
+  setTimeout(() => {
+    const updatedDb = readDb();
+    const instIdx = updatedDb.instances.findIndex((i: any) => i.id === newInst.id);
+    if (instIdx !== -1) {
+      updatedDb.instances[instIdx].status = "active";
+      writeDb(updatedDb);
+    }
+  }, 4000);
+});
+
+// Delete Split Server Instance
+app.delete("/api/instances/:id", (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+
+  db.instances = db.instances.filter((i: any) => i.id !== id);
+
+  // Re-calculate resources
+  const totalAllocCpu = db.instances.reduce((acc: number, item: any) => acc + item.cpuLimit, 0);
+  const totalAllocRam = db.instances.reduce((acc: number, item: any) => acc + item.ramLimit, 0);
+  const totalAllocDisk = db.instances.reduce((acc: number, item: any) => acc + item.diskLimit, 0);
+
+  db.nodeResources.allocatedCpu = totalAllocCpu;
+  db.nodeResources.allocatedRam = totalAllocRam;
+  db.nodeResources.allocatedDisk = totalAllocDisk;
+
+  writeDb(db);
+  res.json({ success: true, message: `Instance ${id} removed successfully.` });
+});
+
+// Log System Error
+app.post("/api/errors", (req, res) => {
+  const { type, message, severity } = req.body;
+  const db = readDb();
+
+  const newErr = {
+    id: `err_${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    type: type || "GENERIC",
+    message: message || "An unknown system anomaly was logged",
+    severity: severity || "warning",
+    resolved: false
+  };
+
+  db.errors.push(newErr);
+  writeDb(db);
+  res.status(201).json(newErr);
+});
+
+// Resolve Error Log
+app.post("/api/errors/:id/resolve", (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  
+  const errIdx = db.errors.findIndex((e: any) => e.id === id);
+  if (errIdx !== -1) {
+    db.errors[errIdx].resolved = true;
+    writeDb(db);
+    return res.json({ success: true, error: db.errors[errIdx] });
+  }
+  res.status(404).json({ error: "Error log not found" });
+});
+
+// Submit / Log Host Resource Pressure
+app.post("/api/pressure", (req, res) => {
+  const { cpu, ram, disk, network } = req.body;
+  const db = readDb();
+
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+  const newLog = {
+    time: timeStr,
+    cpu: Number(cpu) || 10,
+    ram: Number(ram) || 20,
+    disk: Number(disk) || 50,
+    network: Number(network) || 5
+  };
+
+  db.pressureLogs.push(newLog);
+  // Keep only the last 15 entries for performance
+  if (db.pressureLogs.length > 15) {
+    db.pressureLogs.shift();
+  }
+
+  writeDb(db);
+  res.status(201).json(newLog);
+});
 
 // Lazy-initialized Gemini API client
 let aiClient: GoogleGenAI | null = null;

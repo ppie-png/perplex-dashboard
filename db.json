@@ -1,0 +1,43 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "adminpassword",
+      "role": "admin",
+      "displayName": "strkxx (Root)"
+    },
+    {
+      "username": "client",
+      "password": "clientpassword",
+      "role": "client",
+      "displayName": "unstable_user"
+    }
+  ],
+  "instances": [
+    { "id": "inst_1", "name": "Minecraft lobby-01", "type": "Paper Minecraft", "owner": "admin", "cpuLimit": 4, "ramLimit": 16, "diskLimit": 100, "status": "active", "port": 25565 },
+    { "id": "inst_2", "name": "Discord-Bot-Main", "type": "Node.js Bot", "owner": "client", "cpuLimit": 1, "ramLimit": 2, "diskLimit": 10, "status": "active", "port": 8080 },
+    { "id": "inst_3", "name": "MySQL-Primary-DB", "type": "MySQL Database", "owner": "admin", "cpuLimit": 2.5, "ramLimit": 12, "diskLimit": 120, "status": "active", "port": 3306 },
+    { "id": "inst_4", "name": "Palworld-Coop", "type": "Palworld Server", "owner": "client", "cpuLimit": 2, "ramLimit": 8, "diskLimit": 50, "status": "offline", "port": 8211 }
+  ],
+  "errors": [
+    { "id": "err_1", "timestamp": "2026-06-30T07:15:00Z", "type": "EADDRINUSE", "message": "listen EADDRINUSE: address already in use 0.0.0.0:3000", "severity": "critical", "resolved": true },
+    { "id": "err_2", "timestamp": "2026-06-30T08:30:00Z", "type": "CERTBOT_FAIL", "message": "Certbot failed to authenticate panel.unstableuniverse.world - Invalid response 500", "severity": "warning", "resolved": true },
+    { "id": "err_3", "timestamp": "2026-06-30T09:10:00Z", "type": "SYSTEM_OVERPRESSURE", "message": "Host Node CPU usage spiked above 95% due to high Java ticking threads", "severity": "warning", "resolved": false }
+  ],
+  "pressureLogs": [
+    { "time": "08:00", "cpu": 45, "ram": 52, "disk": 71, "network": 12 },
+    { "time": "08:15", "cpu": 55, "ram": 55, "disk": 71, "network": 18 },
+    { "time": "08:30", "cpu": 82, "ram": 61, "disk": 72, "network": 35 },
+    { "time": "08:45", "cpu": 95, "ram": 72, "disk": 72, "network": 48 },
+    { "time": "09:00", "cpu": 60, "ram": 68, "disk": 73, "network": 24 },
+    { "time": "09:15", "cpu": 44, "ram": 45, "disk": 73, "network": 15 }
+  ],
+  "nodeResources": {
+    "totalCpu": 16,
+    "totalRam": 64,
+    "totalDisk": 500,
+    "allocatedCpu": 9.5,
+    "allocatedRam": 38,
+    "allocatedDisk": 280
+  }
+}
