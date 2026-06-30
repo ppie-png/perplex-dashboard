@@ -77,6 +77,51 @@ function readDb() {
     const raw = fs.readFileSync(DB_FILE, "utf-8");
     const db = JSON.parse(raw);
     if (!db.sqlHosts) db.sqlHosts = [];
+    if (!db.nodes) {
+      db.nodes = [
+        {
+          id: "node_1",
+          name: "Frankfurt Main Node 01",
+          location: "Germany (EU-Central)",
+          fqdn: "de-01.perplex.host",
+          ip: "142.250.74.46",
+          daemonPort: 8080,
+          ssl: true,
+          totalCpu: 16,
+          totalRam: 64,
+          totalDisk: 500,
+          allocatedCpu: 9.5,
+          allocatedRam: 38,
+          allocatedDisk: 280,
+          overcommitRatio: 150,
+          status: "online"
+        },
+        {
+          id: "node_2",
+          name: "New York Edge Node 02",
+          location: "United States (US-East)",
+          fqdn: "us-02.perplex.host",
+          ip: "142.250.74.47",
+          daemonPort: 8080,
+          ssl: true,
+          totalCpu: 12,
+          totalRam: 32,
+          totalDisk: 250,
+          allocatedCpu: 0,
+          allocatedRam: 0,
+          allocatedDisk: 0,
+          overcommitRatio: 120,
+          status: "online"
+        }
+      ];
+    }
+    if (db.instances) {
+      db.instances.forEach((inst: any) => {
+        if (!inst.nodeId) {
+          inst.nodeId = "node_1";
+        }
+      });
+    }
     if (db.nodeResources && db.nodeResources.nodeOvercommitRatio === undefined) {
       db.nodeResources.nodeOvercommitRatio = 150;
     }
@@ -221,16 +266,55 @@ app.get("/api/db", (req, res) => {
   res.json({ ...db, users: safeUsers });
 });
 
+// Helper to recalculate per-node and global allocations
+function recalculateNodeAllocations(db: any) {
+  if (!db.nodes) {
+    db.nodes = [];
+  }
+  // Re-calculate resources for each node
+  db.nodes.forEach((node: any) => {
+    const nodeInstances = (db.instances || []).filter((i: any) => i.nodeId === node.id);
+    node.allocatedCpu = nodeInstances.reduce((acc: number, item: any) => acc + (Number(item.cpuLimit) || 0), 0);
+    node.allocatedRam = nodeInstances.reduce((acc: number, item: any) => acc + (Number(item.ramLimit) || 0), 0);
+    node.allocatedDisk = nodeInstances.reduce((acc: number, item: any) => acc + (Number(item.diskLimit) || 0), 0);
+  });
+
+  // Backward compatibility update for db.nodeResources (representing node_1 or first node)
+  const mainNode = db.nodes.find((n: any) => n.id === "node_1") || db.nodes[0];
+  if (mainNode && db.nodeResources) {
+    db.nodeResources.totalCpu = mainNode.totalCpu;
+    db.nodeResources.totalRam = mainNode.totalRam;
+    db.nodeResources.totalDisk = mainNode.totalDisk;
+    db.nodeResources.allocatedCpu = mainNode.allocatedCpu;
+    db.nodeResources.allocatedRam = mainNode.allocatedRam;
+    db.nodeResources.allocatedDisk = mainNode.allocatedDisk;
+    db.nodeResources.nodeOvercommitRatio = mainNode.overcommitRatio || 150;
+  }
+}
+
 // Update Node Resources (Admin Only)
 app.patch("/api/admin/node-resources", requireAdmin, (req, res) => {
   const { totalCpu, totalRam, totalDisk, nodeOvercommitRatio } = req.body;
   const db = readDb();
+  if (!db.nodes) db.nodes = [];
+  
+  // Find node_1
+  const mainNodeIdx = db.nodes.findIndex((n: any) => n.id === "node_1");
+  if (mainNodeIdx !== -1) {
+    if (totalCpu !== undefined) db.nodes[mainNodeIdx].totalCpu = Number(totalCpu);
+    if (totalRam !== undefined) db.nodes[mainNodeIdx].totalRam = Number(totalRam);
+    if (totalDisk !== undefined) db.nodes[mainNodeIdx].totalDisk = Number(totalDisk);
+    if (nodeOvercommitRatio !== undefined) db.nodes[mainNodeIdx].overcommitRatio = Number(nodeOvercommitRatio);
+  }
+
   if (totalCpu !== undefined) db.nodeResources.totalCpu = Number(totalCpu);
   if (totalRam !== undefined) db.nodeResources.totalRam = Number(totalRam);
   if (totalDisk !== undefined) db.nodeResources.totalDisk = Number(totalDisk);
   if (nodeOvercommitRatio !== undefined) db.nodeResources.nodeOvercommitRatio = Number(nodeOvercommitRatio);
+
+  recalculateNodeAllocations(db);
   writeDb(db);
-  res.json({ success: true, nodeResources: db.nodeResources });
+  res.json({ success: true, nodeResources: db.nodeResources, nodes: db.nodes });
 });
 
 // Admin User management APIs
@@ -312,9 +396,91 @@ app.delete("/api/admin/sql-hosts/:id", requireAdmin, (req, res) => {
   res.json({ success: true, message: "SQL Host deleted successfully." });
 });
 
+// Admin Nodes Management APIs
+app.get("/api/admin/nodes", requireAdmin, (req, res) => {
+  const db = readDb();
+  res.json(db.nodes || []);
+});
+
+app.post("/api/admin/nodes", requireAdmin, (req, res) => {
+  const { name, location, fqdn, ip, daemonPort, ssl, totalCpu, totalRam, totalDisk, overcommitRatio } = req.body;
+  if (!name || !ip || !fqdn) {
+    return res.status(400).json({ error: "Node name, IP, and FQDN are required." });
+  }
+  const db = readDb();
+  const newNode = {
+    id: `node_${Date.now()}`,
+    name,
+    location: location || "Default Location",
+    fqdn,
+    ip,
+    daemonPort: Number(daemonPort) || 8080,
+    ssl: ssl !== undefined ? !!ssl : true,
+    totalCpu: Number(totalCpu) || 16,
+    totalRam: Number(totalRam) || 64,
+    totalDisk: Number(totalDisk) || 500,
+    allocatedCpu: 0,
+    allocatedRam: 0,
+    allocatedDisk: 0,
+    overcommitRatio: Number(overcommitRatio) || 150,
+    status: "online"
+  };
+  if (!db.nodes) db.nodes = [];
+  db.nodes.push(newNode);
+  writeDb(db);
+  res.status(201).json(newNode);
+});
+
+app.patch("/api/admin/nodes/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { name, location, fqdn, ip, daemonPort, ssl, totalCpu, totalRam, totalDisk, overcommitRatio, status } = req.body;
+  const db = readDb();
+  if (!db.nodes) db.nodes = [];
+  const idx = db.nodes.findIndex((n: any) => n.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Node not found." });
+  }
+
+  if (name !== undefined) db.nodes[idx].name = name;
+  if (location !== undefined) db.nodes[idx].location = location;
+  if (fqdn !== undefined) db.nodes[idx].fqdn = fqdn;
+  if (ip !== undefined) db.nodes[idx].ip = ip;
+  if (daemonPort !== undefined) db.nodes[idx].daemonPort = Number(daemonPort);
+  if (ssl !== undefined) db.nodes[idx].ssl = !!ssl;
+  if (totalCpu !== undefined) db.nodes[idx].totalCpu = Number(totalCpu);
+  if (totalRam !== undefined) db.nodes[idx].totalRam = Number(totalRam);
+  if (totalDisk !== undefined) db.nodes[idx].totalDisk = Number(totalDisk);
+  if (overcommitRatio !== undefined) db.nodes[idx].overcommitRatio = Number(overcommitRatio);
+  if (status !== undefined) db.nodes[idx].status = status;
+
+  recalculateNodeAllocations(db);
+  writeDb(db);
+  res.json({ success: true, node: db.nodes[idx] });
+});
+
+app.delete("/api/admin/nodes/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  if (!db.nodes) db.nodes = [];
+  
+  if (db.nodes.length <= 1) {
+    return res.status(400).json({ error: "Access protection: You cannot delete the only remaining node." });
+  }
+
+  const assigned = db.instances?.filter((i: any) => i.nodeId === id);
+  if (assigned && assigned.length > 0) {
+    return res.status(400).json({ error: `Cannot delete node: ${assigned.length} server instance(s) are active on this node.` });
+  }
+
+  db.nodes = db.nodes.filter((n: any) => n.id !== id);
+  recalculateNodeAllocations(db);
+  writeDb(db);
+  res.json({ success: true, message: "Server Node successfully unmapped." });
+});
+
 // Add Split Server Instance
 app.post("/api/instances", (req, res) => {
-  const { name, type, owner, cpuLimit, ramLimit, diskLimit, port } = req.body;
+  const { name, type, owner, cpuLimit, ramLimit, diskLimit, port, nodeId } = req.body;
   if (!name) return res.status(400).json({ error: "Name is required" });
 
   const db = readDb();
@@ -329,20 +495,13 @@ app.post("/api/instances", (req, res) => {
     ramLimit: Number(ramLimit) || 2,
     diskLimit: Number(diskLimit) || 10,
     status: "installing",
-    port: Number(port) || (Math.floor(Math.random() * 9000) + 10000)
+    port: Number(port) || (Math.floor(Math.random() * 9000) + 10000),
+    nodeId: nodeId || "node_1"
   };
 
   db.instances.push(newInst);
 
-  // Re-calculate resources
-  const totalAllocCpu = db.instances.reduce((acc: number, item: any) => acc + item.cpuLimit, 0);
-  const totalAllocRam = db.instances.reduce((acc: number, item: any) => acc + item.ramLimit, 0);
-  const totalAllocDisk = db.instances.reduce((acc: number, item: any) => acc + item.diskLimit, 0);
-
-  db.nodeResources.allocatedCpu = totalAllocCpu;
-  db.nodeResources.allocatedRam = totalAllocRam;
-  db.nodeResources.allocatedDisk = totalAllocDisk;
-
+  recalculateNodeAllocations(db);
   writeDb(db);
   res.status(201).json(newInst);
 
@@ -364,15 +523,7 @@ app.delete("/api/instances/:id", (req, res) => {
 
   db.instances = db.instances.filter((i: any) => i.id !== id);
 
-  // Re-calculate resources
-  const totalAllocCpu = db.instances.reduce((acc: number, item: any) => acc + item.cpuLimit, 0);
-  const totalAllocRam = db.instances.reduce((acc: number, item: any) => acc + item.ramLimit, 0);
-  const totalAllocDisk = db.instances.reduce((acc: number, item: any) => acc + item.diskLimit, 0);
-
-  db.nodeResources.allocatedCpu = totalAllocCpu;
-  db.nodeResources.allocatedRam = totalAllocRam;
-  db.nodeResources.allocatedDisk = totalAllocDisk;
-
+  recalculateNodeAllocations(db);
   writeDb(db);
   res.json({ success: true, message: `Instance ${id} removed successfully.` });
 });

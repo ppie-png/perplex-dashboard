@@ -1,11 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { 
   Shield, Cpu, Sliders, HardDrive, Server, Plus, 
-  Trash2, Users, Database, CheckCircle, AlertCircle, Key, RefreshCw
+  Trash2, Users, Database, CheckCircle, AlertCircle, Key, RefreshCw,
+  MapPin, Globe, Lock as LockIcon, Unlock as UnlockIcon, Pencil, X
 } from "lucide-react";
 
 interface AdminCenterViewProps {
   userRole: string;
+}
+
+interface NodeItem {
+  id: string;
+  name: string;
+  location: string;
+  fqdn: string;
+  ip: string;
+  daemonPort: number;
+  ssl: boolean;
+  totalCpu: number;
+  totalRam: number;
+  totalDisk: number;
+  allocatedCpu: number;
+  allocatedRam: number;
+  allocatedDisk: number;
+  overcommitRatio: number;
+  status: 'online' | 'offline';
 }
 
 interface SQLHost {
@@ -47,12 +66,27 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
   const [nodeRes, setNodeRes] = useState<NodeResources | null>(null);
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [sqlHosts, setSqlHosts] = useState<SQLHost[]>([]);
+  const [nodes, setNodes] = useState<NodeItem[]>([]);
 
-  // Form states - Node
+  // Form states - Node (Legacy/Sync fallback)
   const [nodeCpu, setNodeCpu] = useState(16);
   const [nodeRam, setNodeRam] = useState(64);
   const [nodeDisk, setNodeDisk] = useState(500);
   const [nodeOvercommit, setNodeOvercommit] = useState(150);
+
+  // Form states - Create/Edit Node
+  const [newNodeName, setNewNodeName] = useState("");
+  const [newNodeLocation, setNewNodeLocation] = useState("");
+  const [newNodeFqdn, setNewNodeFqdn] = useState("");
+  const [newNodeIp, setNewNodeIp] = useState("");
+  const [newNodeDaemonPort, setNewNodeDaemonPort] = useState(8080);
+  const [newNodeSsl, setNewNodeSsl] = useState(true);
+  const [newNodeCpu, setNewNodeCpu] = useState(16);
+  const [newNodeRam, setNewNodeRam] = useState(64);
+  const [newNodeDisk, setNewNodeDisk] = useState(500);
+  const [newNodeOvercommit, setNewNodeOvercommit] = useState(150);
+  const [isEditingNode, setIsEditingNode] = useState(false);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
 
   // Form states - User
   const [newUsername, setNewUsername] = useState("");
@@ -77,6 +111,7 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
   const [srvCpu, setSrvCpu] = useState(2);
   const [srvRam, setSrvRam] = useState(4);
   const [srvDisk, setSrvDisk] = useState(20);
+  const [srvNodeId, setSrvNodeId] = useState("");
 
   const fetchData = async () => {
     try {
@@ -86,6 +121,7 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
         const data = await res.json();
         setNodeRes(data.nodeResources);
         setSqlHosts(data.sqlHosts || []);
+        setNodes(data.nodes || []);
         
         // Load initial limits
         if (data.nodeResources) {
@@ -93,6 +129,11 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
           setNodeRam(data.nodeResources.totalRam);
           setNodeDisk(data.nodeResources.totalDisk);
           setNodeOvercommit(data.nodeResources.nodeOvercommitRatio || 150);
+        }
+
+        // Set default server node
+        if (data.nodes && data.nodes.length > 0) {
+          setSrvNodeId(data.nodes[0].id);
         }
       }
 
@@ -125,7 +166,7 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
     }
   };
 
-  // Node Limits Form
+  // Node Limits Form (Legacy/Sync fallback)
   const handleUpdateNode = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -145,6 +186,87 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
       } else {
         const err = await res.json();
         triggerAlert("", err.error || "Failed to update node configuration.");
+      }
+    } catch (err) {
+      triggerAlert("", "Server communication failure.");
+    }
+  };
+
+  // Multi-Node administration handlers
+  const handleCreateOrUpdateNode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const url = isEditingNode && editingNodeId 
+        ? `/api/admin/nodes/${editingNodeId}` 
+        : "/api/admin/nodes";
+      const method = isEditingNode ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newNodeName,
+          location: newNodeLocation,
+          fqdn: newNodeFqdn,
+          ip: newNodeIp,
+          daemonPort: newNodeDaemonPort,
+          ssl: newNodeSsl,
+          totalCpu: newNodeCpu,
+          totalRam: newNodeRam,
+          totalDisk: newNodeDisk,
+          overcommitRatio: newNodeOvercommit
+        })
+      });
+
+      if (res.ok) {
+        triggerAlert(isEditingNode ? "Server Node parameters re-configured successfully!" : "New Virtual Server Node mapped successfully!");
+        setNewNodeName("");
+        setNewNodeLocation("");
+        setNewNodeFqdn("");
+        setNewNodeIp("");
+        setNewNodeDaemonPort(8080);
+        setNewNodeSsl(true);
+        setNewNodeCpu(16);
+        setNewNodeRam(64);
+        setNewNodeDisk(500);
+        setNewNodeOvercommit(150);
+        setIsEditingNode(false);
+        setEditingNodeId(null);
+        fetchData();
+      } else {
+        const err = await res.json();
+        triggerAlert("", err.error || "Failed to save node details.");
+      }
+    } catch (err) {
+      triggerAlert("", "Server communication failure.");
+    }
+  };
+
+  const handleEditNodeClick = (node: NodeItem) => {
+    setNewNodeName(node.name);
+    setNewNodeLocation(node.location);
+    setNewNodeFqdn(node.fqdn);
+    setNewNodeIp(node.ip);
+    setNewNodeDaemonPort(node.daemonPort);
+    setNewNodeSsl(node.ssl);
+    setNewNodeCpu(node.totalCpu);
+    setNewNodeRam(node.totalRam);
+    setNewNodeDisk(node.totalDisk);
+    setNewNodeOvercommit(node.overcommitRatio || 150);
+    setIsEditingNode(true);
+    setEditingNodeId(node.id);
+  };
+
+  const handleDeleteNode = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete/unmap this node? This action is permanent and safe guards will prevent deletion if servers are hosted on it.")) return;
+    try {
+      const res = await fetch(`/api/admin/nodes/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        triggerAlert("Node unmapped successfully.");
+        fetchData();
+      } else {
+        const err = await res.json();
+        triggerAlert("", err.error || "Failed to unmap node.");
       }
     } catch (err) {
       triggerAlert("", "Server communication failure.");
@@ -287,7 +409,8 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
           owner: srvOwner,
           cpuLimit: srvCpu,
           ramLimit: srvRam,
-          diskLimit: srvDisk
+          diskLimit: srvDisk,
+          nodeId: srvNodeId
         })
       });
 
@@ -364,7 +487,7 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
           }`}
         >
           <Cpu className="h-4 w-4 text-purple-400" />
-          Node & Hardware Limits
+          Server Nodes Manager
         </button>
         <button
           onClick={() => { setActiveTab("users"); setErrorMsg(""); }}
@@ -396,63 +519,300 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
       </div>
 
       {/* TAB CONTENTS */}
-      {activeTab === "node" && nodeRes && (
+      {activeTab === "node" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
-          {/* Node Config Form */}
-          <div className="lg:col-span-2 bg-slate-900/60 border border-violet-950/20 rounded-3xl p-6 space-y-6">
-            <h3 className="text-sm font-bold text-white flex items-center gap-1.5 border-b border-violet-950/30 pb-3 font-mono">
-              <span className="h-2 w-2 rounded-full bg-purple-500 animate-pulse"></span>
-              NODE METRICS & OVERCOMMIT RATIO
-            </h3>
+          {/* Nodes List Column */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="bg-slate-900/60 border border-violet-950/20 rounded-3xl p-6">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-1.5 font-mono">
+                <span className="h-2.5 w-2.5 bg-green-500 rounded-full animate-pulse"></span>
+                ACTIVE HARDWARE NODES ({nodes.length})
+              </h3>
 
-            <form onSubmit={handleUpdateNode} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {nodes.length === 0 ? (
+                <div className="text-center p-12 text-slate-500 space-y-2">
+                  <Server className="h-8 w-8 mx-auto text-slate-600" />
+                  <p className="text-xs">No host nodes are configured yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {nodes.map(node => {
+                    const overcommitMult = (node.overcommitRatio || 150) / 100;
+                    const maxCpu = Number((node.totalCpu * overcommitMult).toFixed(1));
+                    const maxRam = Math.floor(node.totalRam * overcommitMult);
+                    
+                    const cpuPercent = Math.min(100, ((node.allocatedCpu || 0) / (maxCpu || 1)) * 100);
+                    const ramPercent = Math.min(100, ((node.allocatedRam || 0) / (maxRam || 1)) * 100);
+                    const diskPercent = Math.min(100, ((node.allocatedDisk || 0) / (node.totalDisk || 1)) * 100);
+
+                    return (
+                      <div 
+                        key={node.id} 
+                        className="bg-slate-950/80 border border-violet-950/40 rounded-2xl p-5 space-y-4 hover:border-purple-500/30 transition-all shadow-md relative group animate-fadeIn"
+                      >
+                        {/* Header Row */}
+                        <div className="flex justify-between items-start gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-sm text-white flex items-center gap-1.5">
+                                <Server className="h-4 w-4 text-purple-400" />
+                                {node.name}
+                              </h4>
+                              {node.ssl ? (
+                                <span className="bg-purple-950/60 text-purple-400 text-[9px] px-1.5 py-0.5 rounded border border-purple-500/20 font-bold flex items-center gap-1 font-mono">
+                                  <LockIcon className="h-2.5 w-2.5 animate-pulse" />
+                                  SSL
+                                </span>
+                              ) : (
+                                <span className="bg-amber-950/60 text-amber-400 text-[9px] px-1.5 py-0.5 rounded border border-amber-500/20 font-bold flex items-center gap-1 font-mono">
+                                  <UnlockIcon className="h-2.5 w-2.5" />
+                                  PLAIN
+                                </span>
+                              )}
+                              <span className="bg-green-950/60 text-green-400 text-[9px] px-1.5 py-0.5 rounded border border-green-500/20 font-bold font-mono">
+                                {node.status || "online"}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                              <span className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3 text-purple-400" />
+                                {node.location}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Globe className="h-3 w-3 text-purple-400" />
+                                {node.fqdn}:{node.daemonPort}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Quick Actions */}
+                          <div className="flex items-center gap-1 bg-slate-900/60 p-1 rounded-lg border border-violet-950/40">
+                            <button
+                              onClick={() => handleEditNodeClick(node)}
+                              title="Edit Node Parameters"
+                              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-all cursor-pointer"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-purple-400" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteNode(node.id)}
+                              title="Delete Node"
+                              className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-950/30 rounded transition-all cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Connection String */}
+                        <div className="flex justify-between items-center bg-slate-900/40 p-2.5 rounded-xl border border-violet-950/30 font-mono text-[10px]">
+                          <div>
+                            <span className="text-slate-500">Daemon Endpoint:</span> <span className="text-indigo-400">{node.fqdn}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Node IP:</span> <span className="text-purple-400">{node.ip}</span>
+                          </div>
+                        </div>
+
+                        {/* Resource Allocation Gauges */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] font-mono">
+                          {/* CPU */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">CPU Allocation:</span>
+                              <span className="text-slate-200 font-bold">{(node.allocatedCpu || 0).toFixed(1)} / {maxCpu} Cores</span>
+                            </div>
+                            <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                              <div className="h-full bg-purple-500 transition-all" style={{ width: `${cpuPercent}%` }}></div>
+                            </div>
+                            <p className="text-[9px] text-slate-500">Physical: {node.totalCpu} Cores @ {node.overcommitRatio}%</p>
+                          </div>
+
+                          {/* RAM */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">RAM Allocation:</span>
+                              <span className="text-slate-200 font-bold">{node.allocatedRam || 0} / {maxRam} GB</span>
+                            </div>
+                            <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 transition-all" style={{ width: `${ramPercent}%` }}></div>
+                            </div>
+                            <p className="text-[9px] text-slate-500">Physical: {node.totalRam} GB @ {node.overcommitRatio}%</p>
+                          </div>
+
+                          {/* Storage */}
+                          <div className="space-y-1 font-mono">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Disk Allocation:</span>
+                              <span className="text-slate-200 font-bold">{node.allocatedDisk || 0} / {node.totalDisk} GB</span>
+                            </div>
+                            <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                              <div className="h-full bg-sky-500 transition-all" style={{ width: `${diskPercent}%` }}></div>
+                            </div>
+                            <p className="text-[9px] text-slate-500 font-mono">Physical: {node.totalDisk} GB SSD</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Form Column */}
+          <div className="bg-slate-900/60 border border-violet-950/20 rounded-3xl p-6 space-y-6 self-start shadow-xl">
+            <div className="flex justify-between items-center border-b border-violet-950/30 pb-3">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <Sliders className="h-4 w-4 text-purple-400" />
+                {isEditingNode ? "Modify Node Limits" : "Create Node Host"}
+              </h3>
+              {isEditingNode && (
+                <button 
+                  onClick={() => {
+                    setNewNodeName("");
+                    setNewNodeLocation("");
+                    setNewNodeFqdn("");
+                    setNewNodeIp("");
+                    setNewNodeDaemonPort(8080);
+                    setNewNodeSsl(true);
+                    setNewNodeCpu(16);
+                    setNewNodeRam(64);
+                    setNewNodeDisk(500);
+                    setNewNodeOvercommit(150);
+                    setIsEditingNode(false);
+                    setEditingNodeId(null);
+                  }}
+                  className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleCreateOrUpdateNode} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-slate-400 font-bold block">Node Identifier Name</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Frankfurt-Main-Node-01"
+                  required
+                  value={newNodeName}
+                  onChange={e => setNewNodeName(e.target.value)}
+                  className="w-full bg-slate-950 border border-violet-950 rounded-xl px-4 py-3 text-white outline-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-slate-400 font-bold block">Physical Location / Region</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. Germany (EU-Central)"
+                  required
+                  value={newNodeLocation}
+                  onChange={e => setNewNodeLocation(e.target.value)}
+                  className="w-full bg-slate-950 border border-violet-950 rounded-xl px-4 py-3 text-white outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">CPU Cores (Physical)</label>
+                  <label className="text-slate-400 font-bold block">FQDN / Domain Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. de-01.perplex.host"
+                    required
+                    value={newNodeFqdn}
+                    onChange={e => setNewNodeFqdn(e.target.value)}
+                    className="w-full bg-slate-950 border border-violet-950 rounded-xl px-4 py-3 text-white outline-none font-mono text-[11px]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Public IP Address</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. 142.250.74.46"
+                    required
+                    value={newNodeIp}
+                    onChange={e => setNewNodeIp(e.target.value)}
+                    className="w-full bg-slate-950 border border-violet-950 rounded-xl px-4 py-3 text-white outline-none font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block">Daemon Port</label>
                   <input 
                     type="number" 
-                    value={nodeCpu}
-                    onChange={e => setNodeCpu(Number(e.target.value))}
+                    required
+                    value={newNodeDaemonPort}
+                    onChange={e => setNewNodeDaemonPort(Number(e.target.value))}
                     className="w-full bg-slate-950 border border-violet-950 rounded-xl px-4 py-3 text-white outline-none font-mono"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">Memory RAM (GB Physical)</label>
+                  <label className="text-slate-400 font-bold block">SSL Daemon Mode</label>
+                  <select
+                    value={newNodeSsl ? "true" : "false"}
+                    onChange={e => setNewNodeSsl(e.target.value === "true")}
+                    className="w-full bg-slate-950 border border-violet-950 rounded-xl px-3 py-3 text-slate-200 font-bold"
+                  >
+                    <option value="true">SSL Enabled (Secure)</option>
+                    <option value="false">Plain HTTP (Unsecure)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="border-t border-violet-950/20 pt-4 grid grid-cols-3 gap-2.5">
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block text-[10px]">CPU (Physical)</label>
                   <input 
                     type="number" 
-                    value={nodeRam}
-                    onChange={e => setNodeRam(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-violet-950 rounded-xl px-4 py-3 text-white outline-none font-mono"
+                    required
+                    value={newNodeCpu}
+                    onChange={e => setNewNodeCpu(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-violet-950 rounded-xl px-2 py-3 text-white outline-none font-mono"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-slate-400 font-bold block">SSD Storage (GB Physical)</label>
+                  <label className="text-slate-400 font-bold block text-[10px]">RAM (GB Physical)</label>
                   <input 
                     type="number" 
-                    value={nodeDisk}
-                    onChange={e => setNodeDisk(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-violet-950 rounded-xl px-4 py-3 text-white outline-none font-mono"
+                    required
+                    value={newNodeRam}
+                    onChange={e => setNewNodeRam(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-violet-950 rounded-xl px-2 py-3 text-white outline-none font-mono"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-slate-400 font-bold block text-[10px]">Disk (GB Physical)</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={newNodeDisk}
+                    onChange={e => setNewNodeDisk(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-violet-950 rounded-xl px-2 py-3 text-white outline-none font-mono"
                   />
                 </div>
               </div>
 
               <div className="space-y-2.5 bg-slate-950/40 p-4 rounded-2xl border border-violet-950/30">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-300">Node Overcommit System:</span>
-                  <span className="text-purple-400 font-bold font-mono">{nodeOvercommit}% Limit</span>
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="font-bold text-slate-300">Overcommit Ratio:</span>
+                  <span className="text-purple-400 font-bold font-mono">{newNodeOvercommit}% Ratio</span>
                 </div>
                 <input 
                   type="range"
                   min="100"
                   max="200"
                   step="5"
-                  value={nodeOvercommit}
-                  onChange={e => setNodeOvercommit(Number(e.target.value))}
+                  value={newNodeOvercommit}
+                  onChange={e => setNewNodeOvercommit(Number(e.target.value))}
                   className="w-full accent-purple-500 h-1.5 bg-slate-800 rounded outline-none cursor-pointer"
                 />
-                <p className="text-[11px] text-slate-400 leading-relaxed mt-1">
-                  Overcommitting allows you to dynamically allocate more resources than physically exist (overallocation) since most game servers operate with low idle requirements. 
-                  Currently overcommitting <strong className="text-purple-300">{(nodeCpu * nodeOvercommit/100).toFixed(1)} vCores</strong> and <strong className="text-emerald-400">{Math.floor(nodeRam * nodeOvercommit/100)} GB RAM</strong>.
+                <p className="text-[10px] text-slate-400 leading-normal">
+                  Allows virtual allocation of up to <strong className="text-purple-300">{(newNodeCpu * newNodeOvercommit/100).toFixed(1)} vCores</strong> and <strong className="text-emerald-400">{Math.floor(newNodeRam * newNodeOvercommit/100)} GB RAM</strong> on this node host.
                 </p>
               </div>
 
@@ -460,56 +820,9 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
                 type="submit"
                 className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg text-xs"
               >
-                Apply Node Hardware Parameters
+                {isEditingNode ? "Apply Node Modifications" : "Join Node to Perplex Cluster"}
               </button>
             </form>
-          </div>
-
-          {/* Allocation report card */}
-          <div className="bg-slate-900/60 border border-violet-950/20 rounded-3xl p-6 space-y-4 shadow-lg flex flex-col justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-3">Overallocation Status</h3>
-              <p className="text-xs text-slate-400 mb-6">Real-time breakdown of physical vs allocated resources under overcommit.</p>
-
-              <div className="space-y-4 font-mono text-xs">
-                {/* CPU */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">vCPU Allocation:</span>
-                    <span className="text-slate-200 font-bold">{nodeRes.allocatedCpu} / {virtualMaxCpu} vCores</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-500 transition-all" style={{ width: `${Math.min(100, (nodeRes.allocatedCpu / (virtualMaxCpu || 1)) * 100)}%` }}></div>
-                  </div>
-                </div>
-
-                {/* RAM */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">RAM Allocation:</span>
-                    <span className="text-slate-200 font-bold">{nodeRes.allocatedRam} / {virtualMaxRam} GB</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, (nodeRes.allocatedRam / (virtualMaxRam || 1)) * 100)}%` }}></div>
-                  </div>
-                </div>
-
-                {/* Storage */}
-                <div className="space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Storage Allocation:</span>
-                    <span className="text-slate-200 font-bold">{nodeRes.allocatedDisk} / {nodeRes.totalDisk} GB</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
-                    <div className="h-full bg-sky-500 transition-all" style={{ width: `${Math.min(100, (nodeRes.allocatedDisk / (nodeRes.totalDisk || 1)) * 100)}%` }}></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-950/40 border border-violet-950/40 p-3 rounded-2xl text-[10px] text-purple-300 leading-relaxed font-mono">
-              ★ Active Overcommit Ratio: {(nodeRes.nodeOvercommitRatio || 150)}% allows up to {(nodeRes.nodeOvercommitRatio || 150) - 100}% extra clients to be comfortably provisioned.
-            </div>
           </div>
         </div>
       )}
@@ -835,6 +1148,26 @@ export default function AdminCenterView({ userRole }: AdminCenterViewProps) {
                     {u.displayName} ({u.email || u.username})
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5 animate-fadeIn">
+              <label className="text-slate-400 block font-bold">Deploy to Physical/Virtual Node Host</label>
+              <select
+                value={srvNodeId}
+                onChange={e => setSrvNodeId(e.target.value)}
+                required
+                className="w-full bg-slate-950 border border-violet-950 rounded-xl px-3 py-2 text-slate-200 font-bold font-mono"
+              >
+                {nodes.map(n => {
+                  const mult = (n.overcommitRatio || 150) / 100;
+                  const maxRam = Math.floor(n.totalRam * mult);
+                  return (
+                    <option key={n.id} value={n.id}>
+                      {n.name} - {n.location} (Allocated: {n.allocatedRam}/{maxRam} GB RAM)
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
