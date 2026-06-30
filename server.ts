@@ -4,6 +4,8 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 dotenv.config();
 
@@ -11,6 +13,45 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+const JWT_SECRET = process.env.JWT_SECRET || "sovereign_panel_jwt_super_secret_key_1337";
+
+// Authentication Middleware for Protected API Routes
+const authenticateToken = (req: any, res: any, next: any) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ error: "Access token required. Please sign in." });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
+    if (err) {
+      return res.status(403).json({ error: "Your session has expired or is invalid. Please sign in again." });
+    }
+    req.user = decoded;
+    next();
+  });
+};
+
+const requireAdmin = (req: any, res: any, next: any) => {
+  if (!req.user || req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden: Administrator privileges required." });
+  }
+  next();
+};
+
+// Protect all /api endpoints except auth and health endpoints
+app.use((req, res, next) => {
+  const path = req.path;
+  if (path === "/api/login" || path === "/api/register" || path === "/api/health") {
+    return next();
+  }
+  if (path.startsWith("/api/")) {
+    return authenticateToken(req, res, next);
+  }
+  next();
+});
 
 const DB_FILE = path.join(process.cwd(), "db.json");
 
@@ -59,51 +100,116 @@ function writeDb(data: any) {
 // Authentication
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: "Username/email and password are required." });
+  }
+
   const db = readDb();
   const user = db.users.find((u: any) => 
-    (u.email && u.email.toLowerCase() === email.toLowerCase()) ||
-    (u.username && u.username.toLowerCase() === email.toLowerCase())
+    (u.email && u.email.toLowerCase() === email.toLowerCase().trim()) ||
+    (u.username && u.username.toLowerCase() === email.toLowerCase().trim())
   );
-  if (!user || user.password !== password) {
-    return res.status(401).json({ error: "Invalid email/username or password." });
+
+  if (!user) {
+    return res.status(401).json({ error: "Invalid username/email or password." });
   }
+
+  // Cryptographic password check with bcrypt
+  const isMatch = bcrypt.compareSync(password, user.password);
+  if (!isMatch) {
+    return res.status(401).json({ error: "Invalid username/email or password." });
+  }
+
+  // Generate secure JWT token
+  const token = jwt.sign(
+    { 
+      username: user.username, 
+      email: user.email, 
+      role: user.role, 
+      displayName: user.displayName 
+    },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
   res.json({
     username: user.username,
     email: user.email,
     role: user.role,
     displayName: user.displayName,
-    token: `session_token_${user.username}_${Date.now()}`
+    token
   });
 });
 
 app.post("/api/register", (req, res) => {
   const { username, email, password, displayName } = req.body;
+  
   if (!username || !email || !password) {
     return res.status(400).json({ error: "Username, email, and password are required." });
   }
+
+  const trimmedUsername = username.trim();
+  const trimmedEmail = email.trim();
+
+  // 1. Validation: Username length/characters
+  if (trimmedUsername.length < 3) {
+    return res.status(400).json({ error: "Username must be at least 3 characters long." });
+  }
+  if (!/^[a-zA-Z0-9_-]+$/.test(trimmedUsername)) {
+    return res.status(400).json({ error: "Username can only contain letters, numbers, underscores, and hyphens." });
+  }
+
+  // 2. Validation: Email format
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+    return res.status(400).json({ error: "Please enter a valid email address." });
+  }
+
+  // 3. Validation: Password strength
+  if (password.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters long." });
+  }
+
   const db = readDb();
   const exists = db.users.find((u: any) => 
-    u.username.toLowerCase() === username.trim().toLowerCase() || 
-    u.email.toLowerCase() === email.trim().toLowerCase()
+    u.username.toLowerCase() === trimmedUsername.toLowerCase() || 
+    u.email.toLowerCase() === trimmedEmail.toLowerCase()
   );
   if (exists) {
     return res.status(400).json({ error: "Username or Email is already registered." });
   }
+
+  // 4. Cryptographically secure password hashing
+  const hashedPassword = bcrypt.hashSync(password, 10);
+
   const newUser = { 
-    username: username.trim(), 
-    email: email.trim(), 
-    password, 
+    username: trimmedUsername, 
+    email: trimmedEmail, 
+    password: hashedPassword, 
     role: "client", 
-    displayName: displayName?.trim() || username.trim() 
+    displayName: displayName?.trim() || trimmedUsername 
   };
+  
   db.users.push(newUser);
   writeDb(db);
+
+  // 5. Generate secure JWT token
+  const token = jwt.sign(
+    { 
+      username: newUser.username, 
+      email: newUser.email, 
+      role: newUser.role, 
+      displayName: newUser.displayName 
+    },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
   res.status(201).json({
     username: newUser.username,
     email: newUser.email,
     role: newUser.role,
     displayName: newUser.displayName,
-    token: `session_token_${newUser.username}_${Date.now()}`
+    token
   });
 });
 
@@ -116,7 +222,7 @@ app.get("/api/db", (req, res) => {
 });
 
 // Update Node Resources (Admin Only)
-app.patch("/api/admin/node-resources", (req, res) => {
+app.patch("/api/admin/node-resources", requireAdmin, (req, res) => {
   const { totalCpu, totalRam, totalDisk, nodeOvercommitRatio } = req.body;
   const db = readDb();
   if (totalCpu !== undefined) db.nodeResources.totalCpu = Number(totalCpu);
@@ -128,28 +234,31 @@ app.patch("/api/admin/node-resources", (req, res) => {
 });
 
 // Admin User management APIs
-app.get("/api/admin/users", (req, res) => {
+app.get("/api/admin/users", requireAdmin, (req, res) => {
   const db = readDb();
-  res.json(db.users);
+  // Strip passwords before returning
+  const safeUsers = db.users.map(({ password, ...u }: any) => u);
+  res.json(safeUsers);
 });
 
-app.post("/api/admin/users", (req, res) => {
+app.post("/api/admin/users", requireAdmin, (req, res) => {
   const { username, email, password, role, displayName } = req.body;
   if (!username || !email || !password) {
     return res.status(400).json({ error: "Username, email and password are required." });
   }
   const db = readDb();
-  const exists = db.users.find((u: any) => u.username.toLowerCase() === username.toLowerCase() || u.email.toLowerCase() === email.toLowerCase());
+  const exists = db.users.find((u: any) => u.username.toLowerCase() === username.trim().toLowerCase() || u.email.toLowerCase() === email.trim().toLowerCase());
   if (exists) {
     return res.status(400).json({ error: "Username or Email already registered." });
   }
-  const newUser = { username, email, password, role: role || "client", displayName: displayName || username };
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  const newUser = { username: username.trim(), email: email.trim(), password: hashedPassword, role: role || "client", displayName: displayName || username };
   db.users.push(newUser);
   writeDb(db);
-  res.status(201).json(newUser);
+  res.status(201).json({ username: newUser.username, email: newUser.email, role: newUser.role, displayName: newUser.displayName });
 });
 
-app.patch("/api/admin/users/:username", (req, res) => {
+app.patch("/api/admin/users/:username", requireAdmin, (req, res) => {
   const { username } = req.params;
   const { email, password, role, displayName } = req.body;
   const db = readDb();
@@ -158,14 +267,14 @@ app.patch("/api/admin/users/:username", (req, res) => {
     return res.status(404).json({ error: "User not found." });
   }
   if (email !== undefined) db.users[uIdx].email = email;
-  if (password !== undefined) db.users[uIdx].password = password;
+  if (password !== undefined) db.users[uIdx].password = bcrypt.hashSync(password, 10);
   if (role !== undefined) db.users[uIdx].role = role;
   if (displayName !== undefined) db.users[uIdx].displayName = displayName;
   writeDb(db);
-  res.json({ success: true, user: db.users[uIdx] });
+  res.json({ success: true, user: { username: db.users[uIdx].username, email: db.users[uIdx].email, role: db.users[uIdx].role, displayName: db.users[uIdx].displayName } });
 });
 
-app.delete("/api/admin/users/:username", (req, res) => {
+app.delete("/api/admin/users/:username", requireAdmin, (req, res) => {
   const { username } = req.params;
   const db = readDb();
   db.users = db.users.filter((u: any) => u.username.toLowerCase() !== username.toLowerCase());
@@ -174,7 +283,7 @@ app.delete("/api/admin/users/:username", (req, res) => {
 });
 
 // Admin SQL Host management APIs
-app.post("/api/admin/sql-hosts", (req, res) => {
+app.post("/api/admin/sql-hosts", requireAdmin, (req, res) => {
   const { name, host, port, driver, user, maxDbs, description } = req.body;
   if (!name || !host) {
     return res.status(400).json({ error: "Host name and IP address are required." });
@@ -195,7 +304,7 @@ app.post("/api/admin/sql-hosts", (req, res) => {
   res.status(201).json(newHost);
 });
 
-app.delete("/api/admin/sql-hosts/:id", (req, res) => {
+app.delete("/api/admin/sql-hosts/:id", requireAdmin, (req, res) => {
   const { id } = req.params;
   const db = readDb();
   db.sqlHosts = db.sqlHosts.filter((h: any) => h.id !== id);
@@ -450,6 +559,26 @@ app.get("/api/health", (req, res) => {
 });
 
 async function startServer() {
+  // Migrate plain text passwords to secure bcrypt hashes on startup
+  try {
+    const dbOnBoot = readDb();
+    let updatedDb = false;
+    if (dbOnBoot && dbOnBoot.users) {
+      dbOnBoot.users.forEach((u: any) => {
+        if (u.password && !u.password.startsWith("$2a$") && !u.password.startsWith("$2b$")) {
+          u.password = bcrypt.hashSync(u.password, 10);
+          updatedDb = true;
+        }
+      });
+      if (updatedDb) {
+        writeDb(dbOnBoot);
+        console.log("[BIG SYSTEM AUTH] Legacy plain text user passwords successfully migrated to secure 10-round bcrypt hashes.");
+      }
+    }
+  } catch (err) {
+    console.error("[BIG SYSTEM AUTH] Migration of legacy passwords failed:", err);
+  }
+
   // Robust production detection: check if NODE_ENV is "production" OR if we are running from the compiled server.cjs
   const isProd = process.env.NODE_ENV === "production" || __filename.endsWith("server.cjs");
 
