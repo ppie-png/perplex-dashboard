@@ -1407,6 +1407,61 @@ npm start`}
                       </div>
                     </div>
                   </div>
+
+                  {/* Error 5: EADDRINUSE (Port busy) */}
+                  <div className="space-y-1">
+                    <strong className="text-amber-400 block">⚡ Issue 5: Error: listen EADDRINUSE: address already in use 0.0.0.0:3000</strong>
+                    <div className="text-xs text-slate-300 space-y-2 leading-relaxed pl-1">
+                      <p>
+                        <strong>Why:</strong> Another process (like a previously launched Node/NPM server or PM2 task) is already running and holding port <code className="text-amber-300 font-mono">3000</code>. Express cannot bind to it.
+                      </p>
+                      <div className="bg-slate-950/80 p-3 rounded border border-slate-800 space-y-2 text-[11px]">
+                        <p className="text-emerald-400 font-semibold">👉 The Instant Fix (Kill the blocking port & restart):</p>
+                        <p className="text-slate-400">
+                          Run these commands to find the PID using port 3000, kill it, and start fresh:
+                        </p>
+                        <pre className="bg-slate-950 p-2 rounded text-[11px] text-emerald-400 font-mono overflow-x-auto whitespace-pre">
+{`# 1. Kill whatever process is currently hogging port 3000
+sudo kill -9 $(sudo lsof -t -i:3000)
+
+# 2. Start the app via PM2 again
+cd /var/www/craft-dashboard
+pm2 restart craft-dashboard || pm2 start dist/server.cjs --name "craft-dashboard"`}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Error 6: Cloudflare Proxy Certbot Fail */}
+                  <div className="space-y-1">
+                    <strong className="text-amber-400 block">☁ Issue 6: Certbot fails with "unauthorized" or "500" response for panel.unstableuniverse.world</strong>
+                    <div className="text-xs text-slate-300 space-y-2 leading-relaxed pl-1">
+                      <p>
+                        <strong>Why:</strong> Your domain <code className="text-slate-200 font-mono">panel.unstableuniverse.world</code> is using <strong className="text-amber-400">Cloudflare Proxy (Orange Cloud)</strong>. When Let's Encrypt attempts to query the verification code at <code className="text-slate-300 font-mono">/.well-known/acme-challenge/...</code>, Cloudflare intercepts it or fails to connect to Nginx, yielding a 500 error.
+                      </p>
+                      <div className="bg-slate-950/80 p-3 rounded border border-slate-800 space-y-2 text-[11px]">
+                        <p className="text-emerald-400 font-semibold">👉 Method A: The Instant Cloudflare fix (DNS-Only mode):</p>
+                        <ol className="list-decimal list-inside space-y-1 text-slate-400">
+                          <li>Log in to your <strong>Cloudflare Dashboard</strong>.</li>
+                          <li>Go to <strong className="text-slate-200">DNS Records</strong> for <code className="text-slate-200">unstableuniverse.world</code>.</li>
+                          <li>Find your entry for <code className="text-slate-200">panel</code> and toggle the "Proxy status" from <strong className="text-amber-400">Proxied (Orange Cloud)</strong> to <strong className="text-slate-400">DNS Only (Grey Cloud)</strong>.</li>
+                          <li>Run the Certbot command again: <code className="text-emerald-400 font-mono">sudo certbot --nginx -d panel.unstableuniverse.world</code></li>
+                          <li>Once the certificate is successfully created, you can toggle it back to <strong className="text-amber-400">Proxied</strong>!</li>
+                        </ol>
+
+                        <div className="border-t border-slate-800 my-2 pt-2"></div>
+
+                        <p className="text-emerald-400 font-semibold">👉 Method B: Use Cloudflare SSL Mode (Zero Nginx Certbot Config):</p>
+                        <p className="text-slate-400">
+                          If you want to keep it Proxied and safe, let Cloudflare handle SSL for you:
+                        </p>
+                        <ol className="list-decimal list-inside space-y-1 text-slate-400">
+                          <li>In Cloudflare sidebar, click <strong className="text-slate-200">SSL/TLS</strong> → <strong className="text-slate-200">Overview</strong>.</li>
+                          <li>Change SSL/TLS encryption mode to <strong className="text-amber-400">Flexible</strong> or generate a free <strong className="text-slate-200">Origin Certificate</strong> in Cloudflare to install directly into Nginx.</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
