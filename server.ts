@@ -134,17 +134,39 @@ app.get("/api/health", (req, res) => {
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+  // Robust production detection: check if NODE_ENV is "production" OR if we are running from the compiled server.cjs
+  const isProd = process.env.NODE_ENV === "production" || __filename.endsWith("server.cjs");
+
+  if (!isProd) {
+    console.log("Starting server in DEVELOPMENT mode (Vite middleware)...");
+    try {
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (err) {
+      console.error("Failed to start Vite dev server, falling back to static files:", err);
+      serveStaticFiles();
+    }
   } else {
+    console.log("Starting server in PRODUCTION mode...");
+    serveStaticFiles();
+  }
+
+  function serveStaticFiles() {
     const distPath = path.join(process.cwd(), 'dist');
+    console.log(`Serving static files from: ${distPath}`);
+    
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error(`Error sending index.html from ${indexPath}:`, err);
+          res.status(500).send("500 Internal Server Error: Static build files are missing or unreadable. Please run 'npm run build' first.");
+        }
+      });
     });
   }
 
