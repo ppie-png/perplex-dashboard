@@ -1,0 +1,6 @@
+{
+  "name": "Minecraft Server Panel",
+  "description": "An interactive, premium game server hosting dashboard featuring a real-time terminal console, simulated resource usage charts, plugin & database managers, backup controls, and an AI-powered diagnostic co-pilot.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
