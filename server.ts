@@ -27,13 +27,19 @@ function readDb() {
         instances: [],
         errors: [],
         pressureLogs: [],
-        nodeResources: { totalCpu: 16, totalRam: 64, totalDisk: 500, allocatedCpu: 0, allocatedRam: 0, allocatedDisk: 0 }
+        nodeResources: { totalCpu: 16, totalRam: 64, totalDisk: 500, allocatedCpu: 0, allocatedRam: 0, allocatedDisk: 0, nodeOvercommitRatio: 150 },
+        sqlHosts: []
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(defaultData, null, 2));
       return defaultData;
     }
     const raw = fs.readFileSync(DB_FILE, "utf-8");
-    return JSON.parse(raw);
+    const db = JSON.parse(raw);
+    if (!db.sqlHosts) db.sqlHosts = [];
+    if (db.nodeResources && db.nodeResources.nodeOvercommitRatio === undefined) {
+      db.nodeResources.nodeOvercommitRatio = 150;
+    }
+    return db;
   } catch (err) {
     console.error("Error reading db.json", err);
     return { users: [], instances: [], errors: [], pressureLogs: [], nodeResources: {} };
@@ -76,6 +82,94 @@ app.get("/api/db", (req, res) => {
   // Strip passwords before returning
   const safeUsers = db.users.map(({ password, ...u }: any) => u);
   res.json({ ...db, users: safeUsers });
+});
+
+// Update Node Resources (Admin Only)
+app.patch("/api/admin/node-resources", (req, res) => {
+  const { totalCpu, totalRam, totalDisk, nodeOvercommitRatio } = req.body;
+  const db = readDb();
+  if (totalCpu !== undefined) db.nodeResources.totalCpu = Number(totalCpu);
+  if (totalRam !== undefined) db.nodeResources.totalRam = Number(totalRam);
+  if (totalDisk !== undefined) db.nodeResources.totalDisk = Number(totalDisk);
+  if (nodeOvercommitRatio !== undefined) db.nodeResources.nodeOvercommitRatio = Number(nodeOvercommitRatio);
+  writeDb(db);
+  res.json({ success: true, nodeResources: db.nodeResources });
+});
+
+// Admin User management APIs
+app.get("/api/admin/users", (req, res) => {
+  const db = readDb();
+  res.json(db.users);
+});
+
+app.post("/api/admin/users", (req, res) => {
+  const { username, email, password, role, displayName } = req.body;
+  if (!username || !email || !password) {
+    return res.status(400).json({ error: "Username, email and password are required." });
+  }
+  const db = readDb();
+  const exists = db.users.find((u: any) => u.username.toLowerCase() === username.toLowerCase() || u.email.toLowerCase() === email.toLowerCase());
+  if (exists) {
+    return res.status(400).json({ error: "Username or Email already registered." });
+  }
+  const newUser = { username, email, password, role: role || "client", displayName: displayName || username };
+  db.users.push(newUser);
+  writeDb(db);
+  res.status(201).json(newUser);
+});
+
+app.patch("/api/admin/users/:username", (req, res) => {
+  const { username } = req.params;
+  const { email, password, role, displayName } = req.body;
+  const db = readDb();
+  const uIdx = db.users.findIndex((u: any) => u.username.toLowerCase() === username.toLowerCase());
+  if (uIdx === -1) {
+    return res.status(404).json({ error: "User not found." });
+  }
+  if (email !== undefined) db.users[uIdx].email = email;
+  if (password !== undefined) db.users[uIdx].password = password;
+  if (role !== undefined) db.users[uIdx].role = role;
+  if (displayName !== undefined) db.users[uIdx].displayName = displayName;
+  writeDb(db);
+  res.json({ success: true, user: db.users[uIdx] });
+});
+
+app.delete("/api/admin/users/:username", (req, res) => {
+  const { username } = req.params;
+  const db = readDb();
+  db.users = db.users.filter((u: any) => u.username.toLowerCase() !== username.toLowerCase());
+  writeDb(db);
+  res.json({ success: true, message: `User ${username} deleted.` });
+});
+
+// Admin SQL Host management APIs
+app.post("/api/admin/sql-hosts", (req, res) => {
+  const { name, host, port, driver, user, maxDbs, description } = req.body;
+  if (!name || !host) {
+    return res.status(400).json({ error: "Host name and IP address are required." });
+  }
+  const db = readDb();
+  const newHost = {
+    id: `host_${Date.now()}`,
+    name,
+    host,
+    port: Number(port) || 3306,
+    driver: driver || "mysql",
+    user: user || "root",
+    maxDbs: Number(maxDbs) || 50,
+    description: description || ""
+  };
+  db.sqlHosts.push(newHost);
+  writeDb(db);
+  res.status(201).json(newHost);
+});
+
+app.delete("/api/admin/sql-hosts/:id", (req, res) => {
+  const { id } = req.params;
+  const db = readDb();
+  db.sqlHosts = db.sqlHosts.filter((h: any) => h.id !== id);
+  writeDb(db);
+  res.json({ success: true, message: "SQL Host deleted successfully." });
 });
 
 // Add Split Server Instance

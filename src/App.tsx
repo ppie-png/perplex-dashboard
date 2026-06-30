@@ -4,7 +4,8 @@ import {
   Settings, HardDrive, Sparkles, Server, Copy, Check,
   Play, RotateCcw, Square, ExternalLink, ShieldAlert,
   Layers, Rocket, Lock, User, Cpu, Shield, Activity, 
-  LogOut, AlertTriangle, CheckCircle, Sliders, Menu, X
+  LogOut, AlertTriangle, CheckCircle, Sliders, Menu, X,
+  Sun, Moon
 } from "lucide-react";
 
 import { 
@@ -18,11 +19,11 @@ import PluginMarketplaceView from "./components/PluginMarketplaceView";
 import DatabaseView from "./components/DatabaseView";
 import BackupView from "./components/BackupView";
 import SettingsView from "./components/SettingsView";
-import CopilotView from "./components/CopilotView";
 import LinuxDeploymentView from "./components/LinuxDeploymentView";
 import ServerSplitterView from "./components/ServerSplitterView";
 import TemplatesView from "./components/TemplatesView";
 import HostMetricsView from "./components/HostMetricsView";
+import AdminCenterView from "./components/AdminCenterView";
 
 // Hardcoded mock data definitions
 const DEFAULT_FILES: FileItem[] = [
@@ -80,8 +81,21 @@ interface SessionUser {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    "console" | "files" | "plugins" | "databases" | "backups" | "settings" | "copilot" | "deploy" | "splitter" | "templates" | "metrics"
+    "console" | "files" | "plugins" | "databases" | "backups" | "settings" | "deploy" | "splitter" | "templates" | "metrics" | "admin"
   >("console");
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    return (localStorage.getItem("panel_theme") as "dark" | "light") || "dark";
+  });
+
+  useEffect(() => {
+    if (theme === "light") {
+      document.body.classList.add("light-theme");
+    } else {
+      document.body.classList.remove("light-theme");
+    }
+    localStorage.setItem("panel_theme", theme);
+  }, [theme]);
+
   const [status, setStatus] = useState<ServerStatus>("online");
   const [copiedIp, setCopiedIp] = useState(false);
 
@@ -925,47 +939,56 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Section: AI Companion */}
-                <div className="space-y-1">
-                  <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-widest pl-2">AI Services</span>
-                  
-                  <button
-                    onClick={() => { setActiveTab("copilot"); setMobileSidebarOpen(false); }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl font-bold transition-all cursor-pointer ${
-                      activeTab === "copilot" 
-                        ? "bg-purple-900/30 text-purple-200 border-l-2 border-purple-500" 
-                        : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/40"
-                    }`}
-                  >
-                    <Sparkles className="h-4 w-4 shrink-0 text-purple-400 animate-pulse" />
-                    <span className="flex items-center gap-1.5">
-                      <span>AI CraftPilot</span>
-                      <span className="text-[7px] bg-indigo-500/10 text-indigo-300 px-1 rounded font-mono font-bold">GPT</span>
-                    </span>
-                  </button>
-                </div>
-
               </nav>
             </div>
 
-            {/* User Log-Out Footer bar */}
-            <div className="mt-6 pt-4 border-t border-violet-950/40 flex flex-col gap-3">
+            {/* User Log-Out & Admin Footer bar */}
+            <div className="mt-6 pt-4 border-t border-violet-950/40 flex flex-col gap-2.5">
+              {/* Theme Toggle Switch */}
+              <button
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="w-full bg-slate-950/60 hover:bg-purple-900/15 border border-violet-500/20 text-slate-200 rounded-xl py-2 px-3 font-bold flex items-center justify-between transition-all cursor-pointer text-[11px] font-mono shadow-inner"
+              >
+                <span className="flex items-center gap-2">
+                  {theme === "dark" ? <Moon className="h-3.5 w-3.5 text-purple-400" /> : <Sun className="h-3.5 w-3.5 text-amber-500" />}
+                  <span>{theme === "dark" ? "Dark Theme" : "Light Theme"}</span>
+                </span>
+                <span className="text-[9px] bg-purple-500/10 text-purple-300 px-1.5 py-0.2 rounded border border-purple-500/20">TOGGLE</span>
+              </button>
+
+              {/* Admin Access Quick Center */}
+              {session.role === "admin" && (
+                <button
+                  onClick={() => { setActiveTab("admin"); setMobileSidebarOpen(false); }}
+                  className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-extrabold uppercase text-[10px] tracking-wider transition-all cursor-pointer border ${
+                    activeTab === "admin"
+                      ? "bg-purple-600 border-purple-500 text-white shadow-neon-purple"
+                      : "bg-purple-950/30 text-purple-300 border-purple-500/20 hover:bg-purple-900/40"
+                  }`}
+                >
+                  <Shield className="h-3.5 w-3.5 animate-pulse" />
+                  <span>Sovereign Admin Panel</span>
+                </button>
+              )}
+
               {dbData && (
-                <div className="p-3 bg-slate-900/50 rounded-xl border border-violet-950/40 text-[10px] space-y-2 font-mono text-slate-400">
+                <div className="p-3 bg-slate-950/30 rounded-xl border border-violet-500/10 text-[10px] space-y-1.5 font-mono text-slate-400 shadow-inner">
                   <div className="flex justify-between">
-                    <span>Active Splits:</span>
+                    <span>Active Instances:</span>
                     <strong className="text-purple-300">{dbData.instances?.length || 0}</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span>Host Memory:</span>
-                    <strong className="text-purple-300">{(dbData.nodeResources?.allocatedRam || 38)}/64 GB</strong>
+                    <span>vRAM Capacity:</span>
+                    <strong className="text-purple-300">
+                      {(dbData.nodeResources?.allocatedRam || 38)} / {Math.floor((dbData.nodeResources?.totalRam || 64) * ((dbData.nodeResources?.nodeOvercommitRatio || 150) / 100))} GB
+                    </strong>
                   </div>
                 </div>
               )}
               
               <button 
                 onClick={handleLogOut}
-                className="w-full bg-slate-900 hover:bg-rose-950/40 border border-violet-950/40 hover:border-rose-950/70 text-slate-300 hover:text-rose-400 rounded-xl py-2 px-3 font-bold flex items-center justify-center gap-2 transition-all cursor-pointer text-xs"
+                className="w-full bg-slate-900/50 hover:bg-rose-950/40 border border-violet-500/10 hover:border-rose-950/70 text-slate-400 hover:text-rose-400 rounded-xl py-2 px-3 font-bold flex items-center justify-center gap-2 transition-all cursor-pointer text-xs"
               >
                 <LogOut className="h-4 w-4" />
                 <span>Sign Out Panel</span>
@@ -1068,11 +1091,8 @@ export default function App() {
                   />
                 )}
 
-                {activeTab === "copilot" && (
-                  <CopilotView 
-                    logs={logs}
-                    properties={properties}
-                  />
+                {activeTab === "admin" && (
+                  <AdminCenterView userRole={session.role} />
                 )}
 
                 {activeTab === "deploy" && (
@@ -1096,7 +1116,7 @@ export default function App() {
             {/* Unified App Footer */}
             <footer className="bg-slate-950/50 border-t border-violet-950/20 py-4 text-center text-xs text-slate-500 shrink-0 mt-auto">
               <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-2">
-                <p>© 2026 Perplex Panel Host. Operating securely on unstableuniverse.world.</p>
+                <p>© 2026 Perplex Panel. All rights reserved.</p>
                 <p className="flex items-center gap-1.5">
                   Cluster Orchestration: 
                   <span className="text-purple-400 font-semibold flex items-center gap-1">

@@ -40,6 +40,11 @@
     "totalDisk": 500,
     "allocatedCpu": 9.5,
     "allocatedRam": 38,
-    "allocatedDisk": 280
-  }
+    "allocatedDisk": 280,
+    "nodeOvercommitRatio": 150
+  },
+  "sqlHosts": [
+    { "id": "host_1", "name": "Primary MySQL Cluster", "host": "10.0.4.12", "port": 3306, "driver": "mysql", "user": "root", "maxDbs": 50, "description": "High performance SSD backed database host" },
+    { "id": "host_2", "name": "Sovereign PostgreSQL Node", "host": "10.0.4.15", "port": 5432, "driver": "postgresql", "user": "postgres", "maxDbs": 25, "description": "Sovereign secure database pool for web panels" }
+  ]
 }
