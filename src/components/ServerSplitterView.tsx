@@ -60,9 +60,23 @@ export default function ServerSplitterView({ userRole = "admin", username = "adm
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const freeCpu = node.totalCpu - node.allocatedCpu;
-  const freeRam = node.totalRam - node.allocatedRam;
+  // Smart Overcommit / Overallocation system
+  const [overcommitRatio, setOvercommitRatio] = useState<number>(() => {
+    const cached = localStorage.getItem("node_overcommit_ratio");
+    return cached ? Number(cached) : 150; // default to 150% overcommit (industry standard smart hosting)
+  });
+
+  const virtualTotalCpu = Number((node.totalCpu * (overcommitRatio / 100)).toFixed(1));
+  const virtualTotalRam = Math.floor(node.totalRam * (overcommitRatio / 100));
+
+  const freeCpu = virtualTotalCpu - node.allocatedCpu;
+  const freeRam = virtualTotalRam - node.allocatedRam;
   const freeDisk = node.totalDisk - node.allocatedDisk;
+
+  const handleOvercommitChange = (val: number) => {
+    setOvercommitRatio(val);
+    localStorage.setItem("node_overcommit_ratio", val.toString());
+  };
 
   const refreshData = async () => {
     try {
@@ -100,11 +114,11 @@ export default function ServerSplitterView({ userRole = "admin", username = "adm
     }
 
     if (newCpu > freeCpu) {
-      setErrorMsg(`Insufficient CPU cores available! (Need ${newCpu} Cores, only ${freeCpu.toFixed(1)} free).`);
+      setErrorMsg(`Insufficient CPU cores available! (Need ${newCpu} Cores, only ${freeCpu.toFixed(1)} free under ${overcommitRatio}% Overcommit).`);
       return;
     }
     if (newRam > freeRam) {
-      setErrorMsg(`Insufficient Node RAM available! (Need ${newRam} GB, only ${freeRam} GB free).`);
+      setErrorMsg(`Insufficient Node RAM available! (Need ${newRam} GB, only ${freeRam} GB free under ${overcommitRatio}% Overcommit).`);
       return;
     }
     if (newDisk > freeDisk) {
@@ -192,63 +206,89 @@ export default function ServerSplitterView({ userRole = "admin", username = "adm
           </div>
         </div>
 
+        {/* Smart Overcommit Panel / Overallocation Ratio */}
+        <div className="bg-slate-950/40 border border-violet-950/40 rounded-xl p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5 font-mono">
+              <span className="h-2 w-2 rounded-full bg-purple-500 animate-pulse"></span>
+              Smart Overcommit & Overallocation System
+            </h4>
+            <p className="text-[11px] text-slate-400 max-w-xl">
+              Since game servers rarely hit maximum memory/CPU limits simultaneously, you can overallocate resources to accommodate more clients. Currently overcommitting at <strong className="text-purple-400 font-mono">{overcommitRatio}%</strong>.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 bg-slate-950/80 border border-violet-900/30 rounded-xl p-2 font-mono text-[11px] min-w-[240px]">
+            <span className="text-slate-500 font-bold">Ratio:</span>
+            <input 
+              type="range"
+              min="100"
+              max="200"
+              step="5"
+              value={overcommitRatio}
+              onChange={e => handleOvercommitChange(Number(e.target.value))}
+              className="flex-1 accent-purple-500 h-1 bg-slate-800 rounded outline-none cursor-pointer"
+            />
+            <span className="text-purple-300 font-bold w-12 text-right">{overcommitRatio}%</span>
+          </div>
+        </div>
+
         {/* Node Stats Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* CPU Core Allocation */}
-          <div className="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80 space-y-3">
+          <div className="bg-slate-950/60 rounded-xl p-4 border border-violet-950/20 space-y-3 shadow-inner">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-medium flex items-center gap-1.5">
-                <Cpu className="h-4 w-4 text-amber-400" /> CPU Cores Allocated
+              <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                <Cpu className="h-4 w-4 text-purple-400" /> CPU Cores Allocated
               </span>
               <span className="font-mono font-bold text-slate-200">
-                {node.allocatedCpu} / {node.totalCpu} Cores
+                {node.allocatedCpu} / <span className="text-purple-400 font-extrabold">{virtualTotalCpu}</span> vCores
               </span>
             </div>
-            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-2 w-full bg-slate-850 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-amber-500 rounded-full transition-all duration-500"
-                style={{ width: `${(node.allocatedCpu / node.totalCpu) * 100}%` }}
+                className="h-full bg-purple-500 rounded-full transition-all duration-500 shadow-neon-purple"
+                style={{ width: `${Math.min(100, (node.allocatedCpu / virtualTotalCpu) * 100)}%` }}
               ></div>
             </div>
             <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-              <span>{(node.allocatedCpu / node.totalCpu * 100).toFixed(0)}% Used</span>
-              <span>{freeCpu.toFixed(1)} Cores Free</span>
+              <span>{Math.min(100, Number((node.allocatedCpu / virtualTotalCpu * 100).toFixed(0)))}% Virtual Load</span>
+              <span className="text-slate-400 font-bold">{freeCpu.toFixed(1)} vCores Free</span>
             </div>
           </div>
 
           {/* RAM Allocation */}
-          <div className="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80 space-y-3">
+          <div className="bg-slate-950/60 rounded-xl p-4 border border-violet-950/20 space-y-3 shadow-inner">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-medium flex items-center gap-1.5">
+              <span className="text-slate-300 font-medium flex items-center gap-1.5">
                 <Sliders className="h-4 w-4 text-emerald-400" /> Memory Resource Allocation
               </span>
               <span className="font-mono font-bold text-slate-200">
-                {node.allocatedRam} GB / {node.totalRam} GB
+                {node.allocatedRam} GB / <span className="text-emerald-400 font-extrabold">{virtualTotalRam}</span> GB
               </span>
             </div>
-            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-2 w-full bg-slate-850 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                style={{ width: `${(node.allocatedRam / node.totalRam) * 100}%` }}
+                style={{ width: `${Math.min(100, (node.allocatedRam / virtualTotalRam) * 100)}%` }}
               ></div>
             </div>
             <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-              <span>{(node.allocatedRam / node.totalRam * 100).toFixed(0)}% Allocated</span>
-              <span>{freeRam} GB Available</span>
+              <span>{Math.min(100, Number((node.allocatedRam / virtualTotalRam * 100).toFixed(0)))}% Allocated</span>
+              <span className="text-emerald-400 font-bold">{freeRam} GB Virtual Free</span>
             </div>
           </div>
 
           {/* Disk Allocation */}
-          <div className="bg-slate-950/60 rounded-xl p-4 border border-slate-800/80 space-y-3">
+          <div className="bg-slate-950/60 rounded-xl p-4 border border-violet-950/20 space-y-3 shadow-inner">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-medium flex items-center gap-1.5">
+              <span className="text-slate-300 font-medium flex items-center gap-1.5">
                 <HardDrive className="h-4 w-4 text-sky-400" /> SSD Storage Allocated
               </span>
               <span className="font-mono font-bold text-slate-200">
                 {node.allocatedDisk} GB / {node.totalDisk} GB
               </span>
             </div>
-            <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-2 w-full bg-slate-850 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-sky-500 rounded-full transition-all duration-500"
                 style={{ width: `${(node.allocatedDisk / node.totalDisk) * 100}%` }}
@@ -256,7 +296,7 @@ export default function ServerSplitterView({ userRole = "admin", username = "adm
             </div>
             <div className="flex justify-between text-[10px] text-slate-500 font-mono">
               <span>{(node.allocatedDisk / node.totalDisk * 100).toFixed(0)}% Occupied</span>
-              <span>{freeDisk} GB Remaining</span>
+              <span className="text-sky-400 font-bold">{freeDisk} GB Remaining</span>
             </div>
           </div>
         </div>

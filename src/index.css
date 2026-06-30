@@ -17,24 +17,24 @@
 }
 
 body {
-  background-color: #0b071a; /* Very deep purple-black */
+  background-color: #120c2b; /* Rich, deep purple-indigo canvas, slightly lighter than before for a gorgeous matching look */
   color: #f1f5f9; /* Slate 100 */
   font-family: var(--font-sans);
   background-image: 
-    radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.03) 0%, transparent 60%);
+    radial-gradient(circle at 15% 25%, rgba(139, 92, 246, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 85% 75%, rgba(99, 102, 241, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.05) 0%, transparent 60%);
   background-attachment: fixed;
   background-size: cover;
 }
 
 /* Custom glowing effects */
 .shadow-neon-purple {
-  box-shadow: 0 0 15px rgba(168, 85, 247, 0.25);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.35);
 }
 
 .shadow-neon-purple-lg {
-  box-shadow: 0 0 35px rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 45px rgba(168, 85, 247, 0.5), inset 0 0 20px rgba(139, 92, 246, 0.1);
 }
 
 /* Scroll-reactive animated background overlay */
@@ -46,8 +46,8 @@ body {
   bottom: 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(circle at var(--scroll-x, 50%) var(--scroll-y, 50%), rgba(168, 85, 247, 0.05) 0%, transparent 50%);
-  transition: background 0.1s ease;
+  background: radial-gradient(circle at var(--scroll-x, 50%) var(--scroll-y, 50%), rgba(168, 85, 247, 0.08) 0%, transparent 45%);
+  transition: background 0.15s ease;
 }
 
 /* Custom scrollbar styles */

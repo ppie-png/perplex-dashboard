@@ -192,7 +192,7 @@ export default function App() {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: loginUser, password: loginPass })
+        body: JSON.stringify({ email: loginUser, password: loginPass })
       });
 
       if (res.ok) {
@@ -644,47 +644,47 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b071a] text-slate-100 flex flex-col antialiased relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#120c2b] text-slate-100 flex flex-col antialiased relative overflow-x-hidden">
       {/* Ambient Moving Nebula Background */}
       <div className="scrolling-nebula" />
 
       {/* SECURE CYBERPUNK LOGIN SCREEN */}
       {!session ? (
         <div className="flex-1 min-h-screen flex items-center justify-center p-4 relative z-10 select-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/15 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl animate-pulse"></div>
           
-          <div className="w-full max-w-md bg-slate-950/80 border border-violet-900/40 rounded-3xl p-8 shadow-neon-purple-lg backdrop-blur-md space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-600 via-purple-500 to-indigo-600"></div>
+          <div className="w-full max-w-md bg-slate-900/80 border border-violet-500/30 rounded-3xl p-8 shadow-neon-purple-lg backdrop-blur-md space-y-6 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-600 via-purple-500 to-indigo-600 animate-pulse"></div>
             
             <div className="text-center space-y-1">
-              <div className="inline-flex p-3 bg-purple-500/10 border border-purple-500/30 text-purple-400 rounded-2xl mb-2">
-                <Shield className="h-6 w-6 animate-pulse" />
+              <div className="inline-flex p-3 bg-purple-500/10 border border-purple-500/25 text-purple-400 rounded-2xl mb-2">
+                <Shield className="h-6 w-6 text-purple-400 animate-pulse" />
               </div>
               <h2 className="text-xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
-                Perplex Panel <span className="text-[10px] bg-purple-500/20 text-purple-300 font-mono px-2 py-0.5 rounded border border-purple-500/30">SECURE v2.1</span>
+                Perplex Panel <span className="text-[10px] bg-purple-500/20 text-purple-300 font-mono px-2 py-0.5 rounded border border-purple-500/30">SECURE v2.5</span>
               </h2>
               <p className="text-xs text-slate-400">Authenticating connection to panel.unstableuniverse.world</p>
             </div>
 
             <form onSubmit={handleLoginSubmit} className="space-y-4 text-xs">
               <div className="space-y-1.5">
-                <label className="text-slate-400 font-bold block uppercase tracking-wider">Account Username</label>
+                <label className="text-slate-300 font-bold block uppercase tracking-wider">Email Address / User</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
                   <input 
                     type="text"
                     required
-                    placeholder="e.g. admin"
+                    placeholder="e.g. admin@unstableuniverse.world"
                     value={loginUser}
                     onChange={e => setLoginUser(e.target.value)}
-                    className="w-full bg-slate-900/60 border border-violet-950 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
+                    className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-slate-400 font-bold block uppercase tracking-wider">Secret Password</label>
+                <label className="text-slate-300 font-bold block uppercase tracking-wider">Secret Password</label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400/60" />
                   <input 
@@ -693,7 +693,7 @@ export default function App() {
                     placeholder="••••••••••••"
                     value={loginPass}
                     onChange={e => setLoginPass(e.target.value)}
-                    className="w-full bg-slate-900/60 border border-violet-950 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
+                    className="w-full bg-slate-950/60 border border-violet-900 focus:border-purple-500/50 rounded-xl pl-10 pr-4 py-3 text-slate-200 outline-none text-xs transition-all font-mono"
                   />
                 </div>
               </div>
@@ -723,14 +723,16 @@ export default function App() {
 
             <div className="border-t border-violet-950/60 pt-4 text-[10px] text-slate-400 space-y-2 leading-relaxed">
               <span className="font-bold text-purple-400 block uppercase tracking-wide text-[9px]">Demo Sign-In credentials:</span>
-              <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded-lg border border-violet-950/40 font-mono">
+              <div className="flex justify-between items-center bg-slate-950/40 p-2.5 rounded-lg border border-violet-900/30 font-mono">
                 <div>
-                  <div className="text-slate-300">Admin: <strong className="text-purple-300">admin</strong></div>
-                  <div className="text-slate-500">Pass: adminpassword</div>
+                  <div className="text-slate-300">Admin Email:</div>
+                  <strong className="text-purple-300">admin@unstableuniverse.world</strong>
+                  <div className="text-slate-500 mt-1">Pass: <span className="text-slate-400">adminpassword</span></div>
                 </div>
-                <div className="text-right">
-                  <div className="text-slate-300">Client: <strong className="text-indigo-300">client</strong></div>
-                  <div className="text-slate-500">Pass: clientpassword</div>
+                <div className="text-right border-l border-violet-950/40 pl-3">
+                  <div className="text-slate-300">Client Email:</div>
+                  <strong className="text-indigo-300">client@unstableuniverse.world</strong>
+                  <div className="text-slate-500 mt-1">Pass: <span className="text-slate-400">clientpassword</span></div>
                 </div>
               </div>
             </div>
@@ -759,7 +761,7 @@ export default function App() {
           {/* LEFT SIDEBAR (MAIN SORTED PANEL HUB) */}
           <aside className={`
             ${mobileSidebarOpen ? "block" : "hidden"} 
-            lg:block w-full lg:w-64 bg-slate-950/80 border-b lg:border-b-0 lg:border-r border-violet-950/30 p-5 shrink-0 flex flex-col justify-between overflow-y-auto backdrop-blur-sm z-30
+            lg:block w-full lg:w-72 bg-[#160f35]/85 border-b lg:border-b-0 lg:border-r border-violet-500/20 p-5 shrink-0 flex flex-col justify-between overflow-y-auto backdrop-blur-md z-30 shadow-2xl
           `}>
             <div className="space-y-6">
               {/* Profile & Node Header */}

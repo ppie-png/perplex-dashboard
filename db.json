@@ -2,12 +2,14 @@
   "users": [
     {
       "username": "admin",
+      "email": "admin@unstableuniverse.world",
       "password": "adminpassword",
       "role": "admin",
       "displayName": "strkxx (Root)"
     },
     {
       "username": "client",
+      "email": "client@unstableuniverse.world",
       "password": "clientpassword",
       "role": "client",
       "displayName": "unstable_user"

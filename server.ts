@@ -21,8 +21,8 @@ function readDb() {
       // fallback template if file is deleted
       const defaultData = {
         users: [
-          { username: "admin", password: "adminpassword", role: "admin", displayName: "strkxx (Root)" },
-          { username: "client", password: "clientpassword", role: "client", displayName: "unstable_user" }
+          { username: "admin", email: "admin@unstableuniverse.world", password: "adminpassword", role: "admin", displayName: "strkxx (Root)" },
+          { username: "client", email: "client@unstableuniverse.world", password: "clientpassword", role: "client", displayName: "unstable_user" }
         ],
         instances: [],
         errors: [],
@@ -52,14 +52,18 @@ function writeDb(data: any) {
 
 // Authentication
 app.post("/api/login", (req, res) => {
-  const { username, password } = req.body;
+  const { email, password } = req.body;
   const db = readDb();
-  const user = db.users.find((u: any) => u.username === username && u.password === password);
-  if (!user) {
-    return res.status(401).json({ error: "Invalid username or password" });
+  const user = db.users.find((u: any) => 
+    (u.email && u.email.toLowerCase() === email.toLowerCase()) ||
+    (u.username && u.username.toLowerCase() === email.toLowerCase())
+  );
+  if (!user || user.password !== password) {
+    return res.status(401).json({ error: "Invalid email/username or password." });
   }
   res.json({
     username: user.username,
+    email: user.email,
     role: user.role,
     displayName: user.displayName,
     token: `session_token_${user.username}_${Date.now()}`
