@@ -1312,58 +1312,57 @@ sudo wings --debug`}
                       npm error Error: EACCES: permission denied, open '/var/www/craft-dashboard/package-lock.json'
                     </code>
                     <p className="text-slate-400 text-[11px] pl-1 mt-1">
-                      <strong>Why:</strong> When you extracted the files into <code className="text-slate-300 font-mono">/var/www/</code>, the files became owned by the `root` user or had root-only write permission flags.
+                      <strong>Why:</strong> When files in <code className="text-slate-300 font-mono">/var/www/</code> are owned by the `root` user, standard users cannot edit them.
                       <br />
-                      <strong className="text-emerald-400">👉 How to fix it instantly:</strong> Run this command in your terminal to recursively grant ownership of the dashboard files to your user <code className="text-emerald-400 font-mono">strkxx</code>:
+                      <strong className="text-emerald-400">👉 How to fix it instantly:</strong> Run this command:
                     </p>
                     <div className="relative mt-1">
                       <code className="block bg-slate-950 p-2 rounded text-xs text-emerald-400 font-mono">sudo chown -R $USER:$USER /var/www/craft-dashboard</code>
                     </div>
                   </div>
 
-                  {/* Error 3: Nested ZIP folder */}
+                  {/* Error 3: Deleted Working Directory (PWD Lost) */}
                   <div className="space-y-1">
-                    <strong className="text-amber-400 block">🛑 Issue 3: STILL Getting "package.json Not Found" or "dirname: missing operand"</strong>
+                    <strong className="text-amber-400 block">🛑 Issue 3: Git Clone Failed with "fatal: Unable to read current working directory"</strong>
                     <p className="text-slate-400 text-[11px] pl-1">
-                      <strong>Why this happens:</strong> If you are running Kali inside a Virtual Machine (like VirtualBox/VMware) or on a remote VPS, clicking "Export as ZIP" in your web browser downloads the file onto your **host computer** (e.g. your Windows/Mac host), NOT inside your Kali VM's <code className="text-slate-300 font-mono">~/Downloads</code> folder!
+                      <strong>Why this happens:</strong> You were inside the folder <code className="text-slate-300 font-mono">/var/www/craft-dashboard</code> in your terminal when you ran <code className="text-rose-300 font-mono">sudo rm -rf /var/www/craft-dashboard</code>.
                       <br />
-                      Because there is no ZIP file in Kali, the unzip command did not extract anything, leaving <code className="text-slate-300 font-mono">/var/www/craft-dashboard</code> empty.
+                      This deleted the very folder you were currently standing in! Your Linux shell became "lost" (its active working directory inode no longer exists), causing <code className="text-rose-400 font-mono">git clone</code> to fail with <code className="text-rose-400 font-mono">fatal: Unable to read current working directory: No such file or directory</code>.
                     </p>
-                    <p className="text-emerald-400 text-[11px] pl-1 font-semibold mt-1">
-                      👉 <strong>The 100% Bulletproof Fix (Use GitHub + Git Clone):</strong>
+                    <p className="text-emerald-400 text-[11px] pl-1 font-semibold mt-1.5">
+                      👉 <strong>The 100% Instant Fix (Reset working directory & Clone again):</strong>
                     </p>
-                    <div className="text-[11px] text-slate-300 pl-1 space-y-1.5">
-                      <p>Instead of manually transferring ZIP files, push this project to GitHub and clone it directly:</p>
-                      <ol className="list-decimal list-inside space-y-1 text-slate-400">
-                        <li>In the top right settings gear of this AI Studio interface, select <strong className="text-slate-200">Export to GitHub</strong>.</li>
-                        <li>Create a repository (e.g. <code className="text-amber-300 font-mono">craft-dashboard</code>) and export it.</li>
-                        <li>On your Kali Linux machine, run these commands to instantly clone and install:</li>
-                      </ol>
-                    </div>
+                    <p className="text-slate-300 text-[11px] pl-1">
+                      Run this single block of commands. It switches your terminal back to a safe folder (<code className="text-amber-400 font-mono">cd ~</code>), safely recreates the directory, clones your real repository (<strong className="text-indigo-400 font-semibold">perplex-dashboard</strong>), changes into the new directory, installs all packages, and starts the panel!
+                    </p>
                     <div className="relative mt-2">
                       <pre className="bg-slate-950 p-2.5 rounded text-[11px] text-emerald-400 font-mono overflow-x-auto whitespace-pre">
-{`# 1. Delete the old empty folder and recreate it
+{`# 1. CD to your user home directory first so your terminal is not "lost"!
+cd ~
+
+# 2. Recreate the dashboard directory with correct permissions
 sudo rm -rf /var/www/craft-dashboard
 sudo mkdir -p /var/www/craft-dashboard
 sudo chown -R $USER:$USER /var/www/craft-dashboard
 
-# 2. Clone your GitHub repository directly into the folder
-# (Replace your-github-username with your real username)
-git clone https://github.com/your-github-username/craft-dashboard.git /var/www/craft-dashboard
+# 3. Clone your GitHub repository into the directory
+git clone https://github.com/ppie-png/perplex-dashboard.git /var/www/craft-dashboard
 
-# 3. CD inside and install dependencies
+# 4. NOW enter the cloned directory (where package.json actually exists!)
 cd /var/www/craft-dashboard
-npm install
 
-# 4. Build and start!
+# 5. Install all dependencies and build the app
+npm install
 npm run build
+
+# 6. Start the production backend server!
 npm start`}
                       </pre>
                       <button
-                        onClick={() => handleCopy(`sudo rm -rf /var/www/craft-dashboard\nsudo mkdir -p /var/www/craft-dashboard\nsudo chown -R $USER:$USER /var/www/craft-dashboard\n# Replace your-github-username in the line below\ngit clone https://github.com/your-github-username/craft-dashboard.git /var/www/craft-dashboard\ncd /var/www/craft-dashboard\nnpm install\nnpm run build\nnpm start`, "git_clone_fix")}
+                        onClick={() => handleCopy(`cd ~\nsudo rm -rf /var/www/craft-dashboard\nsudo mkdir -p /var/www/craft-dashboard\nsudo chown -R $USER:$USER /var/www/craft-dashboard\ngit clone https://github.com/ppie-png/perplex-dashboard.git /var/www/craft-dashboard\ncd /var/www/craft-dashboard\nnpm install\nnpm run build\nnpm start`, "git_clone_fix")}
                         className="absolute top-2 right-2 flex items-center gap-1 text-[9px] bg-slate-900 hover:bg-slate-800 text-slate-300 font-mono border border-slate-800 px-2 py-0.5 rounded cursor-pointer"
                       >
-                        {copiedText === "git_clone_fix" ? "Copied!" : "Copy Git Commands"}
+                        {copiedText === "git_clone_fix" ? "Copied!" : "Copy Fix Commands"}
                       </button>
                     </div>
                   </div>
