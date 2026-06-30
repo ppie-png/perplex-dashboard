@@ -1366,6 +1366,47 @@ npm start`}
                       </button>
                     </div>
                   </div>
+
+                  {/* Error 4: Git Clone asking for Username/Password */}
+                  <div className="space-y-1">
+                    <strong className="text-amber-400 block">🔑 Issue 4: Git asks for Username and Password / Token</strong>
+                    <div className="text-xs text-slate-300 space-y-2 leading-relaxed pl-1">
+                      <p>
+                        <strong>Why:</strong> Your GitHub repository <code className="text-slate-200 font-mono">perplex-dashboard</code> is set to <strong>Private</strong>. Git requires your login to prove you have permission to download it.
+                      </p>
+                      <div className="bg-slate-950/80 p-3 rounded border border-slate-800 space-y-2 text-[11px]">
+                        <p className="text-emerald-400 font-semibold">👉 Easy Way Out (Make it Public):</p>
+                        <ol className="list-decimal list-inside space-y-1 text-slate-400">
+                          <li>Go to your GitHub repository in your browser: <a href="https://github.com/ppie-png/perplex-dashboard" target="_blank" className="text-sky-400 hover:underline">github.com/ppie-png/perplex-dashboard</a></li>
+                          <li>Click on <strong className="text-slate-200">Settings</strong> (the gear icon on the repository menu).</li>
+                          <li>Scroll to the very bottom to the <strong className="text-rose-400">Danger Zone</strong>.</li>
+                          <li>Click <strong className="text-rose-400">Change visibility</strong> and choose <strong className="text-emerald-400">Make public</strong>.</li>
+                          <li>Now run the commands above again! It will download instantly without asking for any login!</li>
+                        </ol>
+                        
+                        <div className="border-t border-slate-800 my-2 pt-2"></div>
+
+                        <p className="text-amber-400 font-semibold">👉 Secure Private Way (Use Personal Access Token):</p>
+                        <p className="text-slate-400">
+                          GitHub <strong>no longer accepts</strong> your actual account password on the command line. You must use a token:
+                        </p>
+                        <ol className="list-decimal list-inside space-y-1 text-slate-400">
+                          <li>Go to GitHub → Click your profile picture top-right → <strong className="text-slate-200">Settings</strong>.</li>
+                          <li>On the left sidebar, scroll down and click <strong className="text-slate-200">Developer settings</strong>.</li>
+                          <li>Click <strong className="text-slate-200">Personal access tokens</strong> → <strong className="text-slate-200">Tokens (classic)</strong>.</li>
+                          <li>Click <strong className="text-slate-200">Generate new token</strong> (classic).</li>
+                          <li>Check the <strong className="text-slate-200">"repo"</strong> box, scroll down and click **Generate token**.</li>
+                          <li>Copy the token starting with <code className="text-emerald-400 font-mono">ghp_...</code> (it will only show once!).</li>
+                          <li>Back in your Kali terminal:
+                            <ul className="list-disc list-inside pl-4 mt-1 space-y-0.5">
+                              <li>For **Username**: enter <code className="text-slate-200 font-mono">ppie-png</code></li>
+                              <li>For **Password**: paste your copied <code className="text-slate-200 font-mono">ghp_...</code> token!</li>
+                            </ul>
+                          </li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
